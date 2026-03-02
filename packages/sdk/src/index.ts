@@ -20,3 +20,20 @@
  */
 
 export const SDK_VERSION = "0.1.0" as const;
+
+// ---- Main SDK class ----
+export { ProjectTracker } from "./client";
+
+// ---- Public types (type-only re-exports) ----
+export type {
+  ProjectTrackerConfig,
+  TrackLLMParams,
+  TrackAPIParams,
+  TrackEventPayload,
+  TelemetryPayload,
+  DiscoveryPayload,
+  TrackEventResponse,
+  TrackEventResultItem,
+  EventType,
+  ResourceStatus,
+} from "./types";
