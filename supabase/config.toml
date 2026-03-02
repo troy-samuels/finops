@@ -10,3 +10,10 @@ port = 54322
 
 [studio]
 port = 54323
+
+# Edge Functions — both use custom auth, not Supabase JWT
+[functions.track-event]
+verify_jwt = false
+
+[functions.sync-pricing]
+verify_jwt = false
