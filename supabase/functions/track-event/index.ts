@@ -7,8 +7,9 @@
 // ============================================================
 
 import { getServiceClient } from "../_shared/supabase-client.ts";
-import { corsResponse, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { CORS_HEADERS, corsResponse, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { hashApiKey } from "../_shared/crypto.ts";
+import { checkRateLimit } from "../_shared/rate-limit.ts";
 import type {
   ResolvedApiKey,
   TelemetryPayload,
@@ -292,6 +293,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const resolved = await authenticateApiKey(rawApiKey);
     if (!resolved) {
       return errorResponse(401, "Invalid or revoked API key");
+    }
+
+    // Step 3b: Rate limit (per authenticated API key)
+    const rateCheck = await checkRateLimit(resolved.apiKeyId);
+    if (!rateCheck.allowed) {
+      const retryAfterS = Math.max(Math.ceil(rateCheck.retryAfterMs / 1000), 1);
+      return new Response(
+        JSON.stringify({
+          error: "Rate limit exceeded",
+          limit: rateCheck.limit,
+          current: rateCheck.current,
+          retry_after_ms: rateCheck.retryAfterMs,
+        }),
+        {
+          status: 429,
+          headers: {
+            ...CORS_HEADERS,
+            "Content-Type": "application/json",
+            "Retry-After": String(retryAfterS),
+          },
+        },
+      );
     }
 
     // Step 4: Parse and validate body

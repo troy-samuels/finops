@@ -34,6 +34,21 @@ export class BatchQueue<T> {
     return this.items.splice(0, this.items.length);
   }
 
+  /**
+   * Prepend items to the front of the queue (for re-enqueue on retry).
+   * If the combined size exceeds maxSize, the newest items in the
+   * existing queue are dropped to make room.
+   */
+  prependAll(items: T[]): void {
+    if (items.length === 0) return;
+
+    const combined = [...items, ...this.items];
+    if (combined.length > this.maxSize) {
+      combined.length = this.maxSize;
+    }
+    this.items = combined;
+  }
+
   /** Current number of items in the queue. */
   get length(): number {
     return this.items.length;

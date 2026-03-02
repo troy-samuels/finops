@@ -160,6 +160,22 @@ export class ProjectTracker {
         body: JSON.stringify(batch),
       });
 
+      if (response.status === 429) {
+        console.warn(
+          `[@finops/sdk] rate limited (429). Re-enqueuing ${String(batch.length)} items.`,
+        );
+        this.queue.prependAll(batch);
+        return undefined;
+      }
+
+      if (response.status >= 500) {
+        console.warn(
+          `[@finops/sdk] server error (${String(response.status)}). Re-enqueuing ${String(batch.length)} items.`,
+        );
+        this.queue.prependAll(batch);
+        return undefined;
+      }
+
       if (!response.ok) {
         console.warn(
           `[@finops/sdk] flush failed: HTTP ${String(response.status)}`,
@@ -170,9 +186,10 @@ export class ProjectTracker {
       return (await response.json()) as TrackEventResponse;
     } catch (err: unknown) {
       console.warn(
-        "[@finops/sdk] flush error:",
+        "[@finops/sdk] flush error (re-enqueuing):",
         err instanceof Error ? err.message : "unknown",
       );
+      this.queue.prependAll(batch);
       return undefined;
     } finally {
       this.flushing = false;
