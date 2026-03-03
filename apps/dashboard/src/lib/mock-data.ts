@@ -368,7 +368,7 @@ for (const sub of MOCK_SUBSCRIPTIONS) {
 }
 
 export const MOCK_TOP_DRIVERS: TopDriver[] = Array.from(costBySource.entries())
-  .sort((a, b) => b[1] - a[1])
+  .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
   .slice(0, 3)
   .map(([name, cost], i) => ({
     rank: i + 1,

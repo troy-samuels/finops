@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SubscriptionTable } from "@/components/subscription-table";
 import { AddSubscriptionDialog } from "@/components/add-subscription-dialog";
+import { EmptyState } from "@/components/empty-state";
 import { MOCK_SUBSCRIPTIONS, MOCK_PROJECTS, MOCK_ORG } from "@/lib/mock-data";
 
 export default function SubscriptionsPage() {
@@ -28,10 +29,20 @@ export default function SubscriptionsPage() {
       </div>
 
       <div className="mt-8">
-        <SubscriptionTable
-          subscriptions={MOCK_SUBSCRIPTIONS}
-          projects={MOCK_PROJECTS}
-        />
+        {MOCK_SUBSCRIPTIONS.length > 0 ? (
+          <SubscriptionTable
+            subscriptions={MOCK_SUBSCRIPTIONS}
+            projects={MOCK_PROJECTS}
+          />
+        ) : (
+          <EmptyState
+            icon={CreditCard}
+            title="No subscriptions yet"
+            description="Add your first subscription to start tracking fixed monthly costs."
+            actionLabel="Add subscription"
+            onAction={() => setDialogOpen(true)}
+          />
+        )}
       </div>
 
       <AddSubscriptionDialog

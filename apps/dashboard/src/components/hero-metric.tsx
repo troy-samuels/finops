@@ -1,23 +1,30 @@
+"use client";
+
+import { useCountUp } from "@/hooks/use-count-up";
+import { formatCurrency } from "@/lib/format";
+
 interface HeroMetricProps {
   label: string;
-  value: string;
+  amount: number;
   subtitle?: string;
   trendPercent?: number;
 }
 
 export function HeroMetric({
   label,
-  value,
+  amount,
   subtitle,
   trendPercent,
 }: HeroMetricProps) {
+  const animatedValue = useCountUp(amount);
+
   return (
-    <div>
+    <div className="animate-count-up">
       <p className="text-sm font-medium uppercase tracking-wide text-[#888888]">
         {label}
       </p>
-      <p className="mt-2 text-8xl font-medium tabular-nums tracking-tighter text-white">
-        {value}
+      <p className="mt-2 text-5xl font-medium tabular-nums tracking-tighter text-white md:text-8xl">
+        {formatCurrency(animatedValue)}
       </p>
       {trendPercent !== undefined && trendPercent !== 0 ? (
         <div className="mt-3">
@@ -33,9 +40,11 @@ export function HeroMetric({
           </span>
         </div>
       ) : trendPercent === 0 ? (
-        <p className="mt-3 text-sm text-[#555555]">
-          All costs are within budget
-        </p>
+        <div className="mt-3">
+          <span className="inline-flex items-center rounded-full bg-white/[0.06] px-3 py-1 text-xs font-medium text-[#888888]">
+            Flat — same as last month
+          </span>
+        </div>
       ) : null}
       {subtitle ? (
         <p className="mt-1 text-sm text-[#555555]">{subtitle}</p>

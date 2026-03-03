@@ -51,22 +51,22 @@ export function SubscriptionTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <TableHead className="text-xs font-medium uppercase tracking-wider text-[#666666]">
               Provider
             </TableHead>
             <TableHead className="text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Monthly Cost
             </TableHead>
-            <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <TableHead className="hidden text-xs font-medium uppercase tracking-wider text-[#666666] md:table-cell">
               Scope
             </TableHead>
-            <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <TableHead className="hidden text-xs font-medium uppercase tracking-wider text-[#666666] md:table-cell">
               Project
             </TableHead>
-            <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <TableHead className="hidden text-xs font-medium uppercase tracking-wider text-[#666666] lg:table-cell">
               Covers Metered
             </TableHead>
-            <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <TableHead className="hidden text-xs font-medium uppercase tracking-wider text-[#666666] lg:table-cell">
               Created
             </TableHead>
             <TableHead className="w-[80px]" />
@@ -75,21 +75,28 @@ export function SubscriptionTable({
         <TableBody>
           {rows.map((sub) => (
             <TableRow key={sub.id}>
-              <TableCell className="text-sm font-medium">
-                {sub.provider}
+              <TableCell className="max-w-[120px] truncate text-sm font-medium md:max-w-none">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="truncate">{sub.provider}</span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    <p className="text-xs">{sub.provider}</p>
+                  </TooltipContent>
+                </Tooltip>
               </TableCell>
               <TableCell className="text-right text-sm tabular-nums">
                 {formatCurrency(sub.monthly_cost)}
               </TableCell>
-              <TableCell>
+              <TableCell className="hidden md:table-cell">
                 <Badge variant="secondary" className="text-xs capitalize">
                   {sub.scope}
                 </Badge>
               </TableCell>
-              <TableCell className="text-sm text-muted-foreground">
+              <TableCell className="hidden text-sm text-muted-foreground md:table-cell">
                 {projectName(sub.project_id)}
               </TableCell>
-              <TableCell>
+              <TableCell className="hidden lg:table-cell">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Switch
@@ -105,7 +112,7 @@ export function SubscriptionTable({
                   </TooltipContent>
                 </Tooltip>
               </TableCell>
-              <TableCell className="text-sm text-muted-foreground">
+              <TableCell className="hidden text-sm text-muted-foreground lg:table-cell">
                 {formatDate(sub.created_at)}
               </TableCell>
               <TableCell>

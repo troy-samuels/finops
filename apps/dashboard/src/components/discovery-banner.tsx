@@ -29,7 +29,7 @@ export function DiscoveryBanner({ items }: DiscoveryBannerProps) {
   }
 
   return (
-    <div className="flex items-start gap-3 rounded-xl bg-white/[0.02] px-5 py-4 ring-1 ring-white/[0.06]">
+    <div role="alert" aria-live="polite" className="flex items-start gap-3 rounded-xl bg-white/[0.02] px-5 py-4 ring-1 ring-white/[0.06] animate-slide-down-fade">
       <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[#888888]" />
       <div className="flex-1">
         <p className="text-sm text-[#AAAAAA]">

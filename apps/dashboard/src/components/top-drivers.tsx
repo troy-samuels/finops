@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { BarChart3 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
+import { EmptyState } from "@/components/empty-state";
 import type { TopDriver } from "@/lib/types";
 
 interface TopDriversProps {
@@ -7,6 +9,16 @@ interface TopDriversProps {
 }
 
 export function TopDrivers({ drivers }: TopDriversProps) {
+  if (drivers.length === 0) {
+    return (
+      <EmptyState
+        icon={BarChart3}
+        title="No cost data yet"
+        description="Once you start tracking AI usage, your top cost drivers will appear here."
+      />
+    );
+  }
+
   return (
     <div>
       <h2 className="text-sm font-medium uppercase tracking-wide text-[#888888]">
@@ -16,7 +28,7 @@ export function TopDrivers({ drivers }: TopDriversProps) {
         {drivers.map((driver, i) => (
           <div
             key={driver.name}
-            className={`flex items-center justify-between py-3 ${
+            className={`-mx-3 flex items-center justify-between rounded-lg px-3 py-3 transition-colors hover:bg-white/[0.03] ${
               i < drivers.length - 1 ? "border-b border-white/[0.04]" : ""
             }`}
           >
