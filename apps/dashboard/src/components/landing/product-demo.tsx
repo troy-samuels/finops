@@ -204,40 +204,12 @@ export function ProductDemo() {
             </div>
           </div>
 
-          {/* Desktop floating annotations */}
+          {/* Annotations (inline below the card on all sizes) */}
           <div
             className={cn(
-              "absolute -right-2 top-8 hidden max-w-[200px] rounded-lg bg-[#1A1A1A] p-3 shadow-2xl ring-1 ring-white/[0.1] transition-all duration-500 lg:-right-8 lg:top-12 lg:block",
-              inView
-                ? "translate-x-0 opacity-100"
-                : "translate-x-4 opacity-0",
+              "mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2",
             )}
-            style={{ transitionDelay: "1.5s" }}
           >
-            <p className="text-xs font-medium text-white">Auto-discovery</p>
-            <p className="mt-1 text-xs text-[#666666]">
-              SDK detects new providers automatically from your env vars
-            </p>
-          </div>
-          <div
-            className={cn(
-              "absolute -left-2 bottom-16 hidden max-w-[200px] rounded-lg bg-[#1A1A1A] p-3 shadow-2xl ring-1 ring-white/[0.1] transition-all duration-500 lg:-left-8 lg:bottom-24 lg:block",
-              inView
-                ? "translate-x-0 opacity-100"
-                : "-translate-x-4 opacity-0",
-            )}
-            style={{ transitionDelay: "1.8s" }}
-          >
-            <p className="text-xs font-medium text-white">
-              True cost = tokens + subs
-            </p>
-            <p className="mt-1 text-xs text-[#666666]">
-              Amortized subscription costs distributed across daily spend
-            </p>
-          </div>
-
-          {/* Mobile annotations (inline) */}
-          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
             {[
               {
                 title: "Auto-discovery",

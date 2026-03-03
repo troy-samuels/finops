@@ -20,10 +20,10 @@ const EVENTS = [
     time: "5s ago",
   },
   {
-    provider: "OpenAI",
-    model: "gpt-4o-mini",
-    tokens: 8412,
-    cost: "$0.0021",
+    provider: "Google AI",
+    model: "gemini-1.5-pro",
+    tokens: 4310,
+    cost: "$0.0108",
     time: "8s ago",
   },
   {
@@ -34,10 +34,10 @@ const EVENTS = [
     time: "12s ago",
   },
   {
-    provider: "Anthropic",
-    model: "claude-3.5-sonnet",
-    tokens: 3201,
-    cost: "$0.0481",
+    provider: "Pinecone",
+    model: "query",
+    tokens: 0,
+    cost: "$0.0004",
     time: "15s ago",
   },
 ];
