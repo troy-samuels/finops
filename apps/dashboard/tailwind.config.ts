@@ -71,10 +71,31 @@ const config: Config = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "float-orb": {
+          "0%, 100%": { transform: "translate(-50%, -50%) scale(1)" },
+          "33%": { transform: "translate(-45%, -55%) scale(1.05)" },
+          "66%": { transform: "translate(-55%, -45%) scale(0.95)" },
+        },
+        "fade-in-up": {
+          from: { opacity: "0", transform: "translateY(20px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "slide-down-fade": {
+          from: { opacity: "0", transform: "translateY(-8px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "count-up": {
+          from: { opacity: "0", transform: "translateY(12px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "float-orb": "float-orb 20s ease-in-out infinite",
+        "fade-in-up": "fade-in-up 0.8s ease-out both",
+        "slide-down-fade": "slide-down-fade 0.4s ease-out",
+        "count-up": "count-up 0.6s ease-out",
       },
     },
   },
