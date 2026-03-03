@@ -79,6 +79,44 @@ export interface ModelPricing {
   updated_at: string;
 }
 
+export type PlanTier = "free" | "pro" | "enterprise";
+export type SubscriptionStatus = "active" | "past_due" | "canceled" | "trialing";
+
+export interface Subscription {
+  id: string;
+  org_id: string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  plan_tier: PlanTier;
+  status: SubscriptionStatus;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectBudget {
+  project_id: string;
+  monthly_limit_usd: number;
+  alert_threshold_percent: number;
+  slack_webhook_url: string | null;
+  email_to: string | null;
+  last_alerted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PricingTier {
+  name: string;
+  tier: PlanTier;
+  price: number;
+  priceLabel: string;
+  features: string[];
+  cta: string;
+  highlighted: boolean;
+  priceId: string | null;
+}
+
 // ============================================================
 // Derived / Computed Types for the Dashboard
 // ============================================================
@@ -102,6 +140,12 @@ export interface ActionItem {
   source_id: string;
   action_label: string;
   action_type: "add_subscription" | "awaiting_sync" | "review";
+}
+
+export interface TopDriver {
+  rank: number;
+  name: string;
+  cost: number;
 }
 
 // ============================================================

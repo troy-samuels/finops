@@ -6,6 +6,7 @@ import type {
   DiscoveredResource,
   DailySpend,
   ActionItem,
+  TopDriver,
 } from "./types";
 
 // ============================================================
@@ -332,3 +333,51 @@ export const MOCK_ACTION_ITEMS: ActionItem[] = [
     action_type: "review",
   },
 ];
+
+// ============================================================
+// Top Drivers (computed from events + subscriptions)
+// ============================================================
+
+function formatModelName(model: string): string {
+  if (model.startsWith("claude")) {
+    return model
+      .replace(/-\d{8}$/, "")
+      .split("-")
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+      .join(" ")
+      .replace(/(\d) (\d)/, "$1.$2");
+  }
+  if (model.startsWith("gpt")) {
+    return "GPT-" + model.slice(4);
+  }
+  return model;
+}
+
+const costBySource = new Map<string, number>();
+for (const e of events) {
+  if (!e.is_unmapped) {
+    const current = costBySource.get(e.model_or_endpoint) ?? 0;
+    costBySource.set(e.model_or_endpoint, current + e.cost_incurred);
+  }
+}
+for (const sub of MOCK_SUBSCRIPTIONS) {
+  if (sub.monthly_cost > 0) {
+    const current = costBySource.get(sub.provider) ?? 0;
+    costBySource.set(sub.provider, current + sub.monthly_cost);
+  }
+}
+
+export const MOCK_TOP_DRIVERS: TopDriver[] = Array.from(costBySource.entries())
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 3)
+  .map(([name, cost], i) => ({
+    rank: i + 1,
+    name: name.includes("-") ? formatModelName(name) : name,
+    cost: Math.round(cost * 100) / 100,
+  }));
+
+// ============================================================
+// Spend Trend (month-over-month mock)
+// ============================================================
+
+export const MOCK_SPEND_TREND_PERCENT: number = -12;
