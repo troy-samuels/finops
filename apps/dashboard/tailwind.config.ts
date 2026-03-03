@@ -88,6 +88,34 @@ const config: Config = {
           from: { opacity: "0", transform: "translateY(12px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
+        "draw-line": {
+          from: { strokeDashoffset: "var(--path-length)" },
+          to: { strokeDashoffset: "0" },
+        },
+        "fill-reveal": {
+          from: { opacity: "0" },
+          to: { opacity: "1" },
+        },
+        "slide-in-left": {
+          from: { opacity: "0", transform: "translateX(-16px)" },
+          to: { opacity: "1", transform: "translateX(0)" },
+        },
+        "slide-in-right": {
+          from: { opacity: "0", transform: "translateX(16px)" },
+          to: { opacity: "1", transform: "translateX(0)" },
+        },
+        "pop-in": {
+          "0%": { opacity: "0", transform: "scale(0.9) translateY(8px)" },
+          "100%": { opacity: "1", transform: "scale(1) translateY(0)" },
+        },
+        "pulse-dot": {
+          "0%, 100%": { opacity: "1", transform: "scale(1)" },
+          "50%": { opacity: "0.6", transform: "scale(1.5)" },
+        },
+        "blink-cursor": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -96,6 +124,13 @@ const config: Config = {
         "fade-in-up": "fade-in-up 0.8s ease-out both",
         "slide-down-fade": "slide-down-fade 0.4s ease-out",
         "count-up": "count-up 0.6s ease-out",
+        "draw-line": "draw-line 1.5s ease-out forwards",
+        "fill-reveal": "fill-reveal 0.8s ease-out 1.2s forwards",
+        "slide-in-left": "slide-in-left 0.5s ease-out both",
+        "slide-in-right": "slide-in-right 0.5s ease-out both",
+        "pop-in": "pop-in 0.4s ease-out both",
+        "pulse-dot": "pulse-dot 2s ease-in-out infinite",
+        "blink-cursor": "blink-cursor 1s step-end infinite",
       },
     },
   },

@@ -6,16 +6,18 @@ function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
 }
 
-export function useCountUp(target: number, duration = 1200): number {
+export function useCountUp(target: number, duration = 1200, start = true): number {
   const [value, setValue] = useState(0);
 
   useEffect(() => {
-    let start: number | null = null;
+    if (!start) return;
+
+    let startTime: number | null = null;
     let rafId: number;
 
     function tick(timestamp: number) {
-      if (start === null) start = timestamp;
-      const elapsed = timestamp - start;
+      if (startTime === null) startTime = timestamp;
+      const elapsed = timestamp - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const eased = easeOutCubic(progress);
 
@@ -28,7 +30,7 @@ export function useCountUp(target: number, duration = 1200): number {
 
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [target, duration]);
+  }, [target, duration, start]);
 
   return value;
 }
