@@ -14,11 +14,11 @@ export default function SubscriptionsPage() {
     <div>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Subscriptions
+          <h1 className="text-2xl font-semibold tracking-tight text-white">
+            Fixed Monthly Costs
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Manage recurring service subscriptions.
+          <p className="mt-1 text-sm text-[#666666]">
+            Your fixed monthly costs for tools and platforms.
           </p>
         </div>
         <Button size="sm" onClick={() => setDialogOpen(true)}>
