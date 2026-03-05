@@ -17,6 +17,13 @@ export interface ProjectTrackerConfig {
   maxQueueSize?: number;
   /** Run environment variable discovery on init. Default: true. */
   autoDiscovery?: boolean;
+  /**
+   * Tracking mode controls what data is transmitted to the server.
+   * - 'full' (default): sends all data (tokens, cost, metadata, provider, model)
+   * - 'cost-only': only sends provider, model, cost — strips metadata and token counts
+   * - 'tokens-only': sends provider, model, token counts — no metadata
+   */
+  trackingMode?: 'full' | 'cost-only' | 'tokens-only';
 }
 
 // ---- Public method parameter types ----
@@ -28,6 +35,8 @@ export interface TrackLLMParams {
   tokensCompletion: number;
   metadata?: Record<string, unknown>;
   timestamp?: string;
+  requestId?: string;
+  sentAt?: string;
 }
 
 export interface TrackAPIParams {
@@ -37,6 +46,8 @@ export interface TrackAPIParams {
   tokensCompletion: number;
   metadata?: Record<string, unknown>;
   timestamp?: string;
+  requestId?: string;
+  sentAt?: string;
 }
 
 // ---- Wire payload types (sent to the Edge Function) ----
@@ -53,6 +64,8 @@ export interface TelemetryPayload {
   tokens_completion: number;
   metadata?: Record<string, unknown>;
   timestamp?: string;
+  request_id?: string;
+  sent_at?: string;
 }
 
 export interface DiscoveryPayload {
@@ -61,6 +74,8 @@ export interface DiscoveryPayload {
   provider: string;
   status: ResourceStatus;
   metadata?: Record<string, unknown>;
+  request_id?: string;
+  sent_at?: string;
 }
 
 export type TrackEventPayload = TelemetryPayload | DiscoveryPayload;

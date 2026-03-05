@@ -1,0 +1,5 @@
+control_id,control_name,domain,implementation,evidence,owner,status
+CTRL-01,Ingestion authentication,Security,track-event x-api-key validation + key hash lookup,Function tests + code review,Backend Lead,In Progress
+CTRL-02,Replay protection,Security,request identity + ingest_request_log unique constraint,Replay test logs,Backend Lead,In Progress
+CTRL-03,CI quality gates,SDLC,GitHub Actions CI workflow,CI run logs,Platform Lead,In Progress
+CTRL-04,Privileged RPC restriction,Authorization,service_role-only execute grants,Migration + privilege verification,Backend Lead,In Progress

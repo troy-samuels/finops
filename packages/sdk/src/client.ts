@@ -25,6 +25,7 @@ const DEFAULTS = {
   maxBatchSize: 50,
   maxQueueSize: 1000,
   autoDiscovery: true,
+  trackingMode: 'full' as const,
 } as const;
 
 const REQUEST_ID_LENGTH = 32;
@@ -53,8 +54,10 @@ export class ProjectTracker {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly maxBatchSize: number;
+  private readonly trackingMode: 'full' | 'cost-only' | 'tokens-only';
   private readonly queue: BatchQueue<TrackEventPayload>;
   private readonly enabled: boolean;
+  private readonly discoveredProviders: Set<string> = new Set();
   private flushTimer: ReturnType<typeof setInterval> | null = null;
   private flushing = false;
   private shutdownCalled = false;
@@ -65,6 +68,7 @@ export class ProjectTracker {
 
     this.apiKey = apiKey;
     this.baseUrl = baseUrl.replace(/\/+$/, "");
+    this.trackingMode = config.trackingMode ?? DEFAULTS.trackingMode;
 
     const maxBatchSize = config.maxBatchSize ?? DEFAULTS.maxBatchSize;
     this.maxBatchSize = isPositiveInteger(maxBatchSize)
@@ -112,11 +116,12 @@ export class ProjectTracker {
     }
 
     // Auto-discovery: scan env vars for known provider prefixes
+    // Results are stored LOCALLY and NEVER transmitted to the server
     if (config.autoDiscovery ?? DEFAULTS.autoDiscovery) {
       try {
         const discovered = scanEnvironment();
-        for (const payload of discovered) {
-          this.queue.enqueue(payload);
+        for (const provider of discovered) {
+          this.discoveredProviders.add(provider);
         }
       } catch {
         // Guardrail: never crash the host
@@ -297,6 +302,15 @@ export class ProjectTracker {
   }
 
   /**
+   * Get the list of providers discovered during initialization.
+   * Discovery results are stored locally and never transmitted to the server.
+   * @returns Array of provider names (e.g., ["openai", "anthropic"])
+   */
+  getDiscoveredProviders(): string[] {
+    return Array.from(this.discoveredProviders);
+  }
+
+  /**
    * Gracefully shut down the tracker. Stops the periodic timer and
    * performs a final flush. After shutdown, track calls are no-ops.
    */
@@ -325,13 +339,45 @@ export class ProjectTracker {
       return;
     }
 
-    this.queue.enqueue(this.withIdentity(payload));
+    // Apply trackingMode filtering
+    const filteredPayload = this.applyTrackingMode(payload);
+    this.queue.enqueue(this.withIdentity(filteredPayload));
 
     if (this.queue.length >= this.maxBatchSize) {
       this.flush().catch(() => {
         // Swallow — flush handles errors internally
       });
     }
+  }
+
+  private applyTrackingMode(payload: TrackEventPayload): TrackEventPayload {
+    // Only filter telemetry payloads (not discovery payloads, though we don't send those anymore)
+    if (payload.type !== 'telemetry') {
+      return payload;
+    }
+
+    const telemetry = payload as TelemetryPayload;
+
+    if (this.trackingMode === 'cost-only') {
+      // cost-only: strip metadata and set tokens to 0
+      return {
+        ...telemetry,
+        tokens_prompt: 0,
+        tokens_completion: 0,
+        metadata: undefined,
+      };
+    }
+
+    if (this.trackingMode === 'tokens-only') {
+      // tokens-only: strip metadata only
+      return {
+        ...telemetry,
+        metadata: undefined,
+      };
+    }
+
+    // 'full' mode: send everything unchanged
+    return payload;
   }
 
   private withIdentity(payload: TrackEventPayload): TrackEventPayload {

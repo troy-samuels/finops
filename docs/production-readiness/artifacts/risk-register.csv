@@ -1,0 +1,3 @@
+id,title,domain,severity,likelihood,status,owner,target_date,mitigation,verification
+R-001,Example: Replay attack accepted,Ingestion,High,Medium,Open,Security Lead,2026-03-31,Implement request identity + dedupe,Adversarial replay test
+R-002,Example: Cross-tenant RLS bypass,Tenant Isolation,Critical,Low,Open,Backend Lead,2026-03-31,Policy hardening + negative tests,RLS attack suite

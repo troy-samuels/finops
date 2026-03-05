@@ -4,9 +4,8 @@
 // SAFETY: Never reads env var values. Only matches key name prefixes.
 // SAFETY: Wrapped in try/catch for browser environments where
 //         process.env does not exist.
+// SECURITY: Discovery results are LOCAL ONLY — never transmitted to server.
 // ============================================================
-
-import type { DiscoveryPayload } from "./types";
 
 /** Map from env-var prefix to canonical provider name. */
 const PREFIX_MAP: ReadonlyArray<readonly [string, string]> = [
@@ -27,10 +26,10 @@ const PREFIX_MAP: ReadonlyArray<readonly [string, string]> = [
 
 /**
  * Scan process.env key names against known prefixes.
- * Returns a DiscoveryPayload for each detected provider.
- * Pure function — does not enqueue, only returns payloads.
+ * Returns an array of detected provider names.
+ * Pure function — results are stored locally and NEVER transmitted.
  */
-export function scanEnvironment(): DiscoveryPayload[] {
+export function scanEnvironment(): string[] {
   let envKeys: string[];
   try {
     if (typeof process === "undefined" || !process.env) {
@@ -52,16 +51,5 @@ export function scanEnvironment(): DiscoveryPayload[] {
     }
   }
 
-  const payloads: DiscoveryPayload[] = [];
-  for (const provider of detected) {
-    payloads.push({
-      type: "discovery",
-      resource_type: "env_key",
-      provider,
-      status: "active",
-      metadata: { detected_by: "sdk_auto_discovery" },
-    });
-  }
-
-  return payloads;
+  return Array.from(detected);
 }

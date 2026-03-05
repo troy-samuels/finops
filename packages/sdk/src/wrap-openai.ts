@@ -1,12 +1,14 @@
 // ============================================================
-// OpenAI Client Wrapper — Proxy-based chat.completions.create interceptor
+// OpenAI Client Wrapper — Proxy-based chat.completions.create + embeddings interceptor
 // ============================================================
-// Uses nested Proxies to intercept client.chat.completions.create()
-// without mutating the original client object or depending on the
-// `openai` npm package. All tracking errors are silently swallowed.
+// Uses nested Proxies to intercept client.chat.completions.create() and
+// client.embeddings.create() without mutating the original client object
+// or depending on the `openai` npm package. Supports both Promise and
+// streaming responses. All tracking errors are silently swallowed.
 // ============================================================
 
 import type { TrackLLMParams } from "./types";
+import { wrapAsyncIterable } from "./wrap-stream";
 
 type TrackLLMFn = (params: TrackLLMParams) => void;
 

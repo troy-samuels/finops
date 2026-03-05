@@ -1,4 +1,5 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@finops/db-types";
 
 export function createBrowserClient() {
   const supabaseUrl = process.env["NEXT_PUBLIC_SUPABASE_URL"];
@@ -8,5 +9,5 @@ export function createBrowserClient() {
     throw new Error("Missing Supabase environment variables");
   }
 
-  return createSupabaseClient(supabaseUrl, supabaseAnonKey);
+  return createSupabaseClient<Database>(supabaseUrl, supabaseAnonKey);
 }

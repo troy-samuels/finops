@@ -11,9 +11,11 @@ port = 54322
 [studio]
 port = 54323
 
-# Edge Functions — both use custom auth, not Supabase JWT
+# Edge Functions trust model:
+# - track-event uses x-api-key + replay controls (custom ingestion auth)
+# - sync-pricing is internal and must present a valid JWT/service token
 [functions.track-event]
 verify_jwt = false
 
 [functions.sync-pricing]
-verify_jwt = false
+verify_jwt = true

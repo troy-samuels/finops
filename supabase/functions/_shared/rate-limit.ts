@@ -2,7 +2,7 @@
 // Rate Limiting via Upstash Redis REST API
 // ============================================================
 // Fixed-window INCR/EXPIRE with 1-second windows.
-// Fail-open: if Redis is unreachable or misconfigured, allow.
+// Infra behavior is configurable via RATE_LIMIT_FAIL_OPEN.
 // ============================================================
 
 export interface RateLimitResult {
@@ -10,27 +10,47 @@ export interface RateLimitResult {
   current: number;
   limit: number;
   retryAfterMs: number;
+  degraded: boolean;
+  reason?: "rate_limited" | "infrastructure_unavailable";
 }
 
 const DEFAULT_LIMIT = 100;
 const WINDOW_SIZE_S = 1;
 
+function shouldFailOpenOnInfraError(): boolean {
+  return Deno.env.get("RATE_LIMIT_FAIL_OPEN") === "true";
+}
+
 /**
  * Check rate limit for a given API key.
- * On any error (Redis down, missing env vars), returns allowed: true (fail-open).
+ * On infra failures, behavior is controlled by RATE_LIMIT_FAIL_OPEN.
  */
 export async function checkRateLimit(
   apiKeyId: string,
   limit: number = DEFAULT_LIMIT,
 ): Promise<RateLimitResult> {
-  const ALLOWED: RateLimitResult = { allowed: true, current: 0, limit, retryAfterMs: 0 };
+  const ALLOWED: RateLimitResult = {
+    allowed: true,
+    current: 0,
+    limit,
+    retryAfterMs: 0,
+    degraded: false,
+  };
+  const INFRA_BLOCKED: RateLimitResult = {
+    allowed: false,
+    current: 0,
+    limit,
+    retryAfterMs: 1000,
+    degraded: true,
+    reason: "infrastructure_unavailable",
+  };
 
   try {
     const redisUrl = Deno.env.get("UPSTASH_REDIS_REST_URL");
     const redisToken = Deno.env.get("UPSTASH_REDIS_REST_TOKEN");
 
     if (!redisUrl || !redisToken) {
-      return ALLOWED;
+      return shouldFailOpenOnInfraError() ? ALLOWED : INFRA_BLOCKED;
     }
 
     const now = Date.now();
@@ -52,7 +72,7 @@ export async function checkRateLimit(
 
     if (!response.ok) {
       console.warn(`[rate-limit] Upstash returned HTTP ${String(response.status)}`);
-      return ALLOWED;
+      return shouldFailOpenOnInfraError() ? ALLOWED : INFRA_BLOCKED;
     }
 
     const body = (await response.json()) as Array<{
@@ -63,7 +83,7 @@ export async function checkRateLimit(
     const incrResult = body[0];
     if (!incrResult || incrResult.error) {
       console.warn(`[rate-limit] INCR error: ${incrResult?.error ?? "missing"}`);
-      return ALLOWED;
+      return shouldFailOpenOnInfraError() ? ALLOWED : INFRA_BLOCKED;
     }
 
     const current = incrResult.result ?? 0;
@@ -73,13 +93,26 @@ export async function checkRateLimit(
       const windowEndMs = windowStartMs + WINDOW_SIZE_S * 1000;
       const retryAfterMs = Math.max(windowEndMs - Date.now(), 100);
 
-      return { allowed: false, current, limit, retryAfterMs };
+      return {
+        allowed: false,
+        current,
+        limit,
+        retryAfterMs,
+        degraded: false,
+        reason: "rate_limited",
+      };
     }
 
-    return { allowed: true, current, limit, retryAfterMs: 0 };
+    return {
+      allowed: true,
+      current,
+      limit,
+      retryAfterMs: 0,
+      degraded: false,
+    };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "unknown";
-    console.warn(`[rate-limit] Redis check failed (fail-open): ${message}`);
-    return ALLOWED;
+    console.warn(`[rate-limit] Redis check failed: ${message}`);
+    return shouldFailOpenOnInfraError() ? ALLOWED : INFRA_BLOCKED;
   }
 }

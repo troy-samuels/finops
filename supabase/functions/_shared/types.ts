@@ -91,6 +91,8 @@ export interface TelemetryPayload {
   tokens_completion: number;
   metadata?: Record<string, unknown>;
   timestamp?: string;
+  request_id: string;
+  sent_at: string;
 }
 
 export interface DiscoveryPayload {
@@ -99,6 +101,8 @@ export interface DiscoveryPayload {
   provider: string;
   status: ResourceStatus;
   metadata?: Record<string, unknown>;
+  request_id: string;
+  sent_at: string;
 }
 
 export type TrackEventPayload = TelemetryPayload | DiscoveryPayload;

@@ -120,7 +120,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   try {
     // Step 1: Authorize
     if (!isAuthorized(req)) {
-      return errorResponse(401, "Unauthorized");
+      return errorResponse(401, "Unauthorized", undefined, req);
     }
 
     // Step 2: Fetch from OpenRouter
@@ -131,21 +131,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const message =
         fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
       console.error("OpenRouter fetch failed:", message);
-      return errorResponse(502, "Failed to fetch pricing from OpenRouter", {
-        cause: message,
-      });
+      return errorResponse(
+        502,
+        "Failed to fetch pricing from OpenRouter",
+        { cause: message },
+        req,
+      );
     }
 
     const { models, totalFetched, skipped } = fetchResult;
 
     if (models.length === 0) {
-      return jsonResponse({
-        success: true,
-        models_fetched: totalFetched,
-        models_skipped: skipped,
-        models_upserted: 0,
-        backfill_updated: 0,
-      });
+      return jsonResponse(
+        {
+          success: true,
+          models_fetched: totalFetched,
+          models_skipped: skipped,
+          models_upserted: 0,
+          backfill_updated: 0,
+        },
+        200,
+        req,
+      );
     }
 
     // Step 3: Upsert into model_pricing
@@ -161,9 +168,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     if (upsertError) {
       console.error("model_pricing upsert failed:", upsertError.message);
-      return errorResponse(500, "Failed to upsert model pricing", {
-        message: upsertError.message,
-      });
+      return errorResponse(
+        500,
+        "Failed to upsert model pricing",
+        { message: upsertError.message },
+        req,
+      );
     }
 
     // Step 4: Backfill unmapped costs
@@ -180,17 +190,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // Step 5: Return summary
-    return jsonResponse({
-      success: true,
-      models_fetched: totalFetched,
-      models_skipped: skipped,
-      models_upserted: count ?? models.length,
-      backfill_updated: backfillCount,
-    });
+    return jsonResponse(
+      {
+        success: true,
+        models_fetched: totalFetched,
+        models_skipped: skipped,
+        models_upserted: count ?? models.length,
+        backfill_updated: backfillCount,
+      },
+      200,
+      req,
+    );
   } catch (err: unknown) {
     const message =
       err instanceof Error ? err.message : "Internal server error";
     console.error("sync-pricing unexpected error:", message);
-    return errorResponse(500, "Internal server error");
+    return errorResponse(500, "Internal server error", undefined, req);
   }
 });
