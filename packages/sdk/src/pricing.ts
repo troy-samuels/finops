@@ -66,11 +66,47 @@ export const MODEL_PRICING: readonly ModelPricing[] = [
     promptCostPerToken: 1.1 / 1_000_000,
     completionCostPerToken: 4.4 / 1_000_000,
   },
+  {
+    provider: "openai",
+    model: "gpt-4.1",
+    promptCostPerToken: 2.0 / 1_000_000,
+    completionCostPerToken: 8.0 / 1_000_000,
+  },
+  {
+    provider: "openai",
+    model: "gpt-4.1-mini",
+    promptCostPerToken: 0.4 / 1_000_000,
+    completionCostPerToken: 1.6 / 1_000_000,
+  },
+  {
+    provider: "openai",
+    model: "gpt-4.1-nano",
+    promptCostPerToken: 0.1 / 1_000_000,
+    completionCostPerToken: 0.4 / 1_000_000,
+  },
+  {
+    provider: "openai",
+    model: "o3",
+    promptCostPerToken: 10.0 / 1_000_000,
+    completionCostPerToken: 40.0 / 1_000_000,
+  },
+  {
+    provider: "openai",
+    model: "o4-mini",
+    promptCostPerToken: 1.1 / 1_000_000,
+    completionCostPerToken: 4.4 / 1_000_000,
+  },
 
   // ---- Anthropic ----
   {
     provider: "anthropic",
     model: "claude-opus-4-5",
+    promptCostPerToken: 15.0 / 1_000_000,
+    completionCostPerToken: 75.0 / 1_000_000,
+  },
+  {
+    provider: "anthropic",
+    model: "claude-opus-4-6",
     promptCostPerToken: 15.0 / 1_000_000,
     completionCostPerToken: 75.0 / 1_000_000,
   },
@@ -99,6 +135,18 @@ export const MODEL_PRICING: readonly ModelPricing[] = [
     model: "gemini-2.0-flash",
     promptCostPerToken: 0.1 / 1_000_000,
     completionCostPerToken: 0.4 / 1_000_000,
+  },
+  {
+    provider: "google",
+    model: "gemini-2.5-pro",
+    promptCostPerToken: 1.25 / 1_000_000,
+    completionCostPerToken: 10.0 / 1_000_000,
+  },
+  {
+    provider: "google",
+    model: "gemini-2.5-flash",
+    promptCostPerToken: 0.15 / 1_000_000,
+    completionCostPerToken: 0.6 / 1_000_000,
   },
   {
     provider: "google",

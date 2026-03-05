@@ -113,4 +113,178 @@ describe("ProjectTracker", () => {
 
     await tracker.shutdown();
   });
+
+  it("discovery is local-only and never transmitted", async () => {
+    const fetchMock = vi.fn(async () => mockJsonResponse(200, { success: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    // Mock process.env with some known provider keys
+    const originalEnv = process.env;
+    process.env = {
+      ...originalEnv,
+      OPENAI_API_KEY: "test",
+      ANTHROPIC_API_KEY: "test",
+    };
+
+    const tracker = new ProjectTracker({
+      apiKey: "pk_live_test",
+      baseUrl: "https://example.supabase.co",
+      autoDiscovery: true,
+      flushIntervalMs: 60_000,
+    });
+
+    // Discovery should be stored locally
+    const discovered = tracker.getDiscoveredProviders();
+    expect(discovered).toContain("openai");
+    expect(discovered).toContain("anthropic");
+
+    // Flush immediately — should be empty (no discovery payloads enqueued)
+    await tracker.flush();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // Track a regular event to ensure the queue works
+    tracker.trackLLM({
+      provider: "openai",
+      model: "gpt-4o",
+      tokensPrompt: 10,
+      tokensCompletion: 5,
+    });
+
+    await tracker.flush();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const firstCall = fetchMock.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    const [, init] = firstCall as unknown as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Array<{ type: string }>;
+    
+    // Should only have telemetry, not discovery
+    expect(body.length).toBe(1);
+    expect(body[0]?.type).toBe("telemetry");
+
+    // Restore env
+    process.env = originalEnv;
+    await tracker.shutdown();
+  });
+
+  it("trackingMode 'cost-only' strips metadata and tokens", async () => {
+    const fetchMock = vi.fn(async () => mockJsonResponse(200, { success: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const tracker = new ProjectTracker({
+      apiKey: "pk_live_test",
+      baseUrl: "https://example.supabase.co",
+      autoDiscovery: false,
+      flushIntervalMs: 60_000,
+      trackingMode: "cost-only",
+    });
+
+    tracker.trackLLM({
+      provider: "openai",
+      model: "gpt-4o",
+      tokensPrompt: 100,
+      tokensCompletion: 50,
+      metadata: { user: "test-user", session: "abc123" },
+    });
+
+    await tracker.flush();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const firstCall = fetchMock.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    const [, init] = firstCall as unknown as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Array<{
+      tokens_prompt: number;
+      tokens_completion: number;
+      metadata?: unknown;
+    }>;
+
+    expect(body.length).toBe(1);
+    expect(body[0]?.tokens_prompt).toBe(0);
+    expect(body[0]?.tokens_completion).toBe(0);
+    expect(body[0]?.metadata).toBeUndefined();
+
+    await tracker.shutdown();
+  });
+
+  it("trackingMode 'tokens-only' strips metadata but keeps tokens", async () => {
+    const fetchMock = vi.fn(async () => mockJsonResponse(200, { success: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const tracker = new ProjectTracker({
+      apiKey: "pk_live_test",
+      baseUrl: "https://example.supabase.co",
+      autoDiscovery: false,
+      flushIntervalMs: 60_000,
+      trackingMode: "tokens-only",
+    });
+
+    tracker.trackLLM({
+      provider: "openai",
+      model: "gpt-4o",
+      tokensPrompt: 100,
+      tokensCompletion: 50,
+      metadata: { user: "test-user", session: "abc123" },
+    });
+
+    await tracker.flush();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const firstCall = fetchMock.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    const [, init] = firstCall as unknown as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Array<{
+      tokens_prompt: number;
+      tokens_completion: number;
+      metadata?: unknown;
+    }>;
+
+    expect(body.length).toBe(1);
+    expect(body[0]?.tokens_prompt).toBe(100);
+    expect(body[0]?.tokens_completion).toBe(50);
+    expect(body[0]?.metadata).toBeUndefined();
+
+    await tracker.shutdown();
+  });
+
+  it("trackingMode 'full' sends all data unchanged", async () => {
+    const fetchMock = vi.fn(async () => mockJsonResponse(200, { success: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const tracker = new ProjectTracker({
+      apiKey: "pk_live_test",
+      baseUrl: "https://example.supabase.co",
+      autoDiscovery: false,
+      flushIntervalMs: 60_000,
+      trackingMode: "full",
+    });
+
+    tracker.trackLLM({
+      provider: "openai",
+      model: "gpt-4o",
+      tokensPrompt: 100,
+      tokensCompletion: 50,
+      metadata: { user: "test-user", session: "abc123" },
+    });
+
+    await tracker.flush();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const firstCall = fetchMock.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    const [, init] = firstCall as unknown as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Array<{
+      tokens_prompt: number;
+      tokens_completion: number;
+      metadata?: Record<string, unknown>;
+    }>;
+
+    expect(body.length).toBe(1);
+    expect(body[0]?.tokens_prompt).toBe(100);
+    expect(body[0]?.tokens_completion).toBe(50);
+    expect(body[0]?.metadata).toEqual({ user: "test-user", session: "abc123" });
+
+    await tracker.shutdown();
+  });
 });

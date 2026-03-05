@@ -3,10 +3,12 @@
 // ============================================================
 // Uses nested Proxies to intercept client.messages.create() without
 // mutating the original client object or depending on the `@anthropic-ai/sdk`
-// package. All tracking errors are silently swallowed.
+// package. Supports both Promise and streaming responses.
+// All tracking errors are silently swallowed.
 // ============================================================
 
 import type { TrackLLMParams } from "./types";
+import { wrapAsyncIterable } from "./wrap-stream";
 
 type TrackLLMFn = (params: TrackLLMParams) => void;
 
@@ -19,11 +21,29 @@ interface AnthropicMessageLike {
   };
 }
 
+/** Minimal structural type for an Anthropic streaming event. */
+interface AnthropicStreamEventLike {
+  type?: string;
+  message?: {
+    model?: string;
+    usage?: {
+      input_tokens?: number;
+      output_tokens?: number;
+    };
+  };
+}
+
 /** Type guard: does the value look like an Anthropic Message? */
 function isAnthropicMessageLike(val: unknown): val is AnthropicMessageLike {
   if (typeof val !== "object" || val === null) return false;
   const obj = val as Record<string, unknown>;
   return "model" in obj && typeof obj["model"] === "string";
+}
+
+/** Type guard: is the value an async iterable? */
+function isAsyncIterable(val: unknown): val is AsyncIterable<unknown> {
+  if (val == null || typeof val !== "object") return false;
+  return Symbol.asyncIterator in val;
 }
 
 /** Extract tracking params from an Anthropic message response. */
@@ -71,13 +91,60 @@ export function createAnthropicWrapper(
     this: unknown,
     ...args: unknown[]
   ): unknown {
+    // Check if streaming is requested
+    const isStreaming = args.length > 0 &&
+      typeof args[0] === "object" &&
+      args[0] !== null &&
+      (args[0] as Record<string, unknown>)["stream"] === true;
+
     const result: unknown = Function.prototype.apply.call(
       originalCreate,
       this,
       args,
     );
 
-    // If the result is a thenable (Promise), attach fire-and-forget tracking
+    // Handle streaming responses (MessageStream is an async iterable)
+    if (isStreaming && isAsyncIterable(result)) {
+      // Accumulator for usage data from streaming events
+      let model = "unknown";
+      let inputTokens = 0;
+      let outputTokens = 0;
+      let hasUsage = false;
+
+      return wrapAsyncIterable(
+        result as AsyncIterable<unknown>,
+        (event: unknown) => {
+          // Accumulate usage data from streaming events
+          if (typeof event === "object" && event !== null) {
+            const eventObj = event as AnthropicStreamEventLike;
+            // The final event (message_stop) or message_delta events may contain usage
+            if (eventObj.type === "message_stop" || eventObj.type === "message_delta") {
+              if (eventObj.message?.model) {
+                model = eventObj.message.model;
+              }
+              if (eventObj.message?.usage) {
+                hasUsage = true;
+                inputTokens = eventObj.message.usage.input_tokens ?? inputTokens;
+                outputTokens = eventObj.message.usage.output_tokens ?? outputTokens;
+              }
+            }
+          }
+        },
+        () => {
+          // Stream completed — fire tracking with accumulated data
+          if (hasUsage) {
+            trackFn({
+              provider: "anthropic",
+              model,
+              tokensPrompt: inputTokens,
+              tokensCompletion: outputTokens,
+            });
+          }
+        },
+      );
+    }
+
+    // Handle Promise responses (non-streaming)
     if (
       result != null &&
       typeof (result as Record<string, unknown>)["then"] === "function"

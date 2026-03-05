@@ -1,13 +1,14 @@
 // ============================================================
-// Google AI Client Wrapper — Proxy-based generateContent interceptor
+// Google AI Client Wrapper — Proxy-based generateContent + streaming interceptor
 // ============================================================
 // Wraps Google GenerativeAI model instances so that every call to
-// model.generateContent() is tracked. Works by proxying the
-// getGenerativeModel() method on the client to return proxied model
-// instances. All tracking errors are silently swallowed.
+// model.generateContent() and model.generateContentStream() is tracked.
+// Works by proxying the getGenerativeModel() method on the client to
+// return proxied model instances. All tracking errors are silently swallowed.
 // ============================================================
 
 import type { TrackLLMParams } from "./types";
+import { wrapAsyncIterable } from "./wrap-stream";
 
 type TrackLLMFn = (params: TrackLLMParams) => void;
 
@@ -48,7 +49,8 @@ function extractTrackingParams(
 }
 
 /**
- * Create a proxy around a model instance that intercepts generateContent().
+ * Create a proxy around a model instance that intercepts generateContent()
+ * and generateContentStream().
  */
 function proxyModelInstance(
   model: Record<string, unknown>,
@@ -63,59 +65,153 @@ function proxyModelInstance(
         : "unknown";
 
   const originalGenerateContent = model["generateContent"];
-  if (typeof originalGenerateContent !== "function") {
+  const originalGenerateContentStream = model["generateContentStream"];
+
+  const hasGenerateContent = typeof originalGenerateContent === "function";
+  const hasGenerateContentStream = typeof originalGenerateContentStream === "function";
+
+  if (!hasGenerateContent && !hasGenerateContentStream) {
     return model;
   }
 
-  const wrappedGenerateContent = function (
-    this: unknown,
-    ...args: unknown[]
-  ): unknown {
-    const result: unknown = Function.prototype.apply.call(
-      originalGenerateContent,
-      this,
-      args,
-    );
+  let wrappedGenerateContent: ((this: unknown, ...args: unknown[]) => unknown) | undefined;
+  let wrappedGenerateContentStream: ((this: unknown, ...args: unknown[]) => unknown) | undefined;
 
-    // If the result is a thenable (Promise), attach fire-and-forget tracking
-    if (
-      result != null &&
-      typeof (result as Record<string, unknown>)["then"] === "function"
-    ) {
-      const promise = result as Promise<unknown>;
-      promise.then(
-        (response: unknown) => {
-          try {
-            if (isGoogleResultLike(response)) {
-              trackFn(extractTrackingParams(response, modelName));
-            }
-          } catch {
-            // Swallow tracking errors
-          }
-        },
-        () => {
-          // Google call failed — nothing to track
-        },
+  // Wrap generateContent (Promise-based)
+  if (hasGenerateContent) {
+    wrappedGenerateContent = function (
+      this: unknown,
+      ...args: unknown[]
+    ): unknown {
+      const result: unknown = Function.prototype.apply.call(
+        originalGenerateContent,
+        this,
+        args,
       );
-      return result;
-    }
 
-    // Synchronous return (unlikely but handle gracefully)
-    try {
-      if (isGoogleResultLike(result)) {
-        trackFn(extractTrackingParams(result, modelName));
+      // If the result is a thenable (Promise), attach fire-and-forget tracking
+      if (
+        result != null &&
+        typeof (result as Record<string, unknown>)["then"] === "function"
+      ) {
+        const promise = result as Promise<unknown>;
+        promise.then(
+          (response: unknown) => {
+            try {
+              if (isGoogleResultLike(response)) {
+                trackFn(extractTrackingParams(response, modelName));
+              }
+            } catch {
+              // Swallow tracking errors
+            }
+          },
+          () => {
+            // Google call failed — nothing to track
+          },
+        );
+        return result;
       }
-    } catch {
-      // Swallow
-    }
 
-    return result;
-  };
+      // Synchronous return (unlikely but handle gracefully)
+      try {
+        if (isGoogleResultLike(result)) {
+          trackFn(extractTrackingParams(result, modelName));
+        }
+      } catch {
+        // Swallow
+      }
+
+      return result;
+    };
+  }
+
+  // Wrap generateContentStream (async iterable)
+  if (hasGenerateContentStream) {
+    wrappedGenerateContentStream = function (
+      this: unknown,
+      ...args: unknown[]
+    ): unknown {
+      const result: unknown = Function.prototype.apply.call(
+        originalGenerateContentStream,
+        this,
+        args,
+      );
+
+      // The result should be a Promise that resolves to a stream response
+      if (
+        result != null &&
+        typeof (result as Record<string, unknown>)["then"] === "function"
+      ) {
+        const promise = result as Promise<unknown>;
+        return promise.then((streamResponse: unknown) => {
+          // Check if the response has a stream property that's an async iterable
+          if (
+            typeof streamResponse === "object" &&
+            streamResponse !== null &&
+            "stream" in streamResponse
+          ) {
+            const streamObj = streamResponse as Record<string, unknown>;
+            const stream = streamObj["stream"];
+            
+            if (stream != null && typeof stream === "object" && Symbol.asyncIterator in stream) {
+              // Accumulator for usage data from streaming chunks
+              let promptTokens = 0;
+              let candidatesTokens = 0;
+              let hasUsage = false;
+
+              const wrappedStream = wrapAsyncIterable(
+                stream as AsyncIterable<unknown>,
+                (chunk: unknown) => {
+                  // Accumulate usage data from chunks
+                  if (isGoogleResultLike(chunk)) {
+                    const usage = chunk.response?.usageMetadata;
+                    if (usage) {
+                      hasUsage = true;
+                      promptTokens = usage.promptTokenCount ?? promptTokens;
+                      candidatesTokens = usage.candidatesTokenCount ?? candidatesTokens;
+                    }
+                  }
+                },
+                () => {
+                  // Stream completed — fire tracking with accumulated data
+                  if (hasUsage) {
+                    trackFn({
+                      provider: "google",
+                      model: modelName,
+                      tokensPrompt: promptTokens,
+                      tokensCompletion: candidatesTokens,
+                    });
+                  }
+                },
+              );
+
+              // Return a proxy of the stream response with the wrapped stream
+              return new Proxy(streamObj, {
+                get(target: Record<string, unknown>, prop: string | symbol): unknown {
+                  if (prop === "stream") {
+                    return wrappedStream;
+                  }
+                  return target[prop as string];
+                },
+              });
+            }
+          }
+
+          return streamResponse;
+        });
+      }
+
+      return result;
+    };
+  }
 
   return new Proxy(model, {
     get(target: Record<string, unknown>, prop: string | symbol): unknown {
-      if (prop === "generateContent") {
+      if (prop === "generateContent" && wrappedGenerateContent) {
         return wrappedGenerateContent;
+      }
+      if (prop === "generateContentStream" && wrappedGenerateContentStream) {
+        return wrappedGenerateContentStream;
       }
       return target[prop as string];
     },

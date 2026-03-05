@@ -21,6 +21,24 @@ interface ChatCompletionLike {
   };
 }
 
+/** Minimal structural type for an OpenAI streaming chunk. */
+interface ChatCompletionChunkLike {
+  model?: string;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+  };
+}
+
+/** Minimal structural type for an OpenAI embeddings response. */
+interface EmbeddingsResponseLike {
+  model?: string;
+  usage?: {
+    prompt_tokens?: number;
+    total_tokens?: number;
+  };
+}
+
 /** Type guard: does the value look like a ChatCompletion? */
 function isChatCompletionLike(val: unknown): val is ChatCompletionLike {
   if (typeof val !== "object" || val === null) return false;
@@ -28,6 +46,19 @@ function isChatCompletionLike(val: unknown): val is ChatCompletionLike {
     "model" in val &&
     typeof (val as Record<string, unknown>)["model"] === "string"
   );
+}
+
+/** Type guard: does the value look like an Embeddings response? */
+function isEmbeddingsResponseLike(val: unknown): val is EmbeddingsResponseLike {
+  if (typeof val !== "object" || val === null) return false;
+  const obj = val as Record<string, unknown>;
+  return "model" in obj && "usage" in obj;
+}
+
+/** Type guard: is the value an async iterable? */
+function isAsyncIterable(val: unknown): val is AsyncIterable<unknown> {
+  if (val == null || typeof val !== "object") return false;
+  return Symbol.asyncIterator in val;
 }
 
 /** Extract tracking params from a chat completion response. */
@@ -40,8 +71,19 @@ function extractTrackingParams(response: ChatCompletionLike): TrackLLMParams {
   };
 }
 
+/** Extract tracking params from an embeddings response. */
+function extractEmbeddingsParams(response: EmbeddingsResponseLike): TrackLLMParams {
+  return {
+    provider: "openai",
+    model: response.model ?? "unknown",
+    tokensPrompt: response.usage?.prompt_tokens ?? 0,
+    tokensCompletion: 0, // Embeddings have no completion tokens
+  };
+}
+
 /**
- * Wrap an OpenAI client to auto-track chat.completions.create() calls.
+ * Wrap an OpenAI client to auto-track chat.completions.create() and
+ * embeddings.create() calls.
  *
  * Returns a Proxy of the client. The original client is not modified.
  * If the client does not have the expected shape, returns it unchanged.
@@ -59,28 +101,50 @@ export function createOpenAIWrapper(
   }
 
   const clientObj = client as Record<string, unknown>;
+  
+  // Wrap chat.completions.create
   const originalChat = clientObj["chat"];
-  if (typeof originalChat !== "object" || originalChat === null) {
+  const hasChatCompletions = typeof originalChat === "object" && 
+    originalChat !== null &&
+    typeof (originalChat as Record<string, unknown>)["completions"] === "object";
+
+  // Wrap embeddings.create
+  const originalEmbeddings = clientObj["embeddings"];
+  const hasEmbeddings = typeof originalEmbeddings === "object" && 
+    originalEmbeddings !== null;
+
+  if (!hasChatCompletions && !hasEmbeddings) {
     return client;
   }
 
-  const chatObj = originalChat as Record<string, unknown>;
-  const originalCompletions = chatObj["completions"];
-  if (typeof originalCompletions !== "object" || originalCompletions === null) {
-    return client;
-  }
+  let chatProxy: Record<string, unknown> | null = null;
+  let embeddingsProxy: Record<string, unknown> | null = null;
 
-  const completionsObj = originalCompletions as Record<string, unknown>;
-  const originalCreate = completionsObj["create"];
-  if (typeof originalCreate !== "function") {
-    return client;
-  }
+  // Set up chat.completions.create wrapper
+  if (hasChatCompletions) {
+    const chatObj = originalChat as Record<string, unknown>;
+    const originalCompletions = chatObj["completions"];
+    if (typeof originalCompletions !== "object" || originalCompletions === null) {
+      return client;
+    }
+
+    const completionsObj = originalCompletions as Record<string, unknown>;
+    const originalCreate = completionsObj["create"];
+    if (typeof originalCreate !== "function") {
+      return client;
+    }
 
   // Wrapped create that calls the original, then tracks usage
   const wrappedCreate = function (
     this: unknown,
     ...args: unknown[]
   ): unknown {
+    // Check if streaming is requested
+    const isStreaming = args.length > 0 &&
+      typeof args[0] === "object" &&
+      args[0] !== null &&
+      (args[0] as Record<string, unknown>)["stream"] === true;
+
     // Call the original — if it throws synchronously, re-throw
     // (SDK must not swallow OpenAI errors)
     const result: unknown = Function.prototype.apply.call(
@@ -89,7 +153,45 @@ export function createOpenAIWrapper(
       args,
     );
 
-    // If the result is a thenable (Promise), attach fire-and-forget tracking
+    // Handle streaming responses
+    if (isStreaming && isAsyncIterable(result)) {
+      // Accumulator for usage data from streaming chunks
+      let model = "unknown";
+      let promptTokens = 0;
+      let completionTokens = 0;
+      let hasUsage = false;
+
+      return wrapAsyncIterable(
+        result as AsyncIterable<unknown>,
+        (chunk: unknown) => {
+          // Accumulate usage data from chunks
+          if (typeof chunk === "object" && chunk !== null) {
+            const chunkObj = chunk as ChatCompletionChunkLike;
+            if (chunkObj.model) {
+              model = chunkObj.model;
+            }
+            if (chunkObj.usage) {
+              hasUsage = true;
+              promptTokens = chunkObj.usage.prompt_tokens ?? promptTokens;
+              completionTokens = chunkObj.usage.completion_tokens ?? completionTokens;
+            }
+          }
+        },
+        () => {
+          // Stream completed — fire tracking with accumulated data
+          if (hasUsage) {
+            trackFn({
+              provider: "openai",
+              model,
+              tokensPrompt: promptTokens,
+              tokensCompletion: completionTokens,
+            });
+          }
+        },
+      );
+    }
+
+    // Handle Promise responses (non-streaming)
     if (
       result != null &&
       typeof (result as Record<string, unknown>)["then"] === "function"
@@ -126,29 +228,87 @@ export function createOpenAIWrapper(
     return result;
   };
 
-  // Build the nested Proxy chain
-  const completionsProxy = new Proxy(completionsObj, {
-    get(target: Record<string, unknown>, prop: string | symbol): unknown {
-      if (prop === "create") {
-        return wrappedCreate;
-      }
-      return target[prop as string];
-    },
-  });
+    // Build the nested Proxy chain for chat.completions
+    const completionsProxy = new Proxy(completionsObj, {
+      get(target: Record<string, unknown>, prop: string | symbol): unknown {
+        if (prop === "create") {
+          return wrappedCreate;
+        }
+        return target[prop as string];
+      },
+    });
 
-  const chatProxy = new Proxy(chatObj, {
-    get(target: Record<string, unknown>, prop: string | symbol): unknown {
-      if (prop === "completions") {
-        return completionsProxy;
-      }
-      return target[prop as string];
-    },
-  });
+    chatProxy = new Proxy(chatObj, {
+      get(target: Record<string, unknown>, prop: string | symbol): unknown {
+        if (prop === "completions") {
+          return completionsProxy;
+        }
+        return target[prop as string];
+      },
+    });
+  }
 
+  // Set up embeddings.create wrapper
+  if (hasEmbeddings) {
+    const embeddingsObj = originalEmbeddings as Record<string, unknown>;
+    const originalEmbeddingsCreate = embeddingsObj["create"];
+    
+    if (typeof originalEmbeddingsCreate === "function") {
+      const wrappedEmbeddingsCreate = function (
+        this: unknown,
+        ...args: unknown[]
+      ): unknown {
+        const result: unknown = Function.prototype.apply.call(
+          originalEmbeddingsCreate,
+          this,
+          args,
+        );
+
+        // Embeddings are always Promise-based (no streaming)
+        if (
+          result != null &&
+          typeof (result as Record<string, unknown>)["then"] === "function"
+        ) {
+          const promise = result as Promise<unknown>;
+          promise.then(
+            (response: unknown) => {
+              try {
+                if (isEmbeddingsResponseLike(response)) {
+                  trackFn(extractEmbeddingsParams(response));
+                }
+              } catch {
+                // Swallow tracking errors
+              }
+            },
+            () => {
+              // OpenAI embeddings call failed — nothing to track
+            },
+          );
+          return result;
+        }
+
+        return result;
+      };
+
+      embeddingsProxy = new Proxy(embeddingsObj, {
+        get(target: Record<string, unknown>, prop: string | symbol): unknown {
+          if (prop === "create") {
+            return wrappedEmbeddingsCreate;
+          }
+          return target[prop as string];
+        },
+      });
+    }
+  }
+
+  // Build the final client proxy
   return new Proxy(clientObj, {
     get(target: Record<string, unknown>, prop: string | symbol): unknown {
-      if (prop === "chat") {
+      if (prop === "chat" && chatProxy !== null) {
         return chatProxy;
+      }
+      if (prop === "embeddings" && embeddingsProxy !== null) {
+        return embeddingsProxy;
       }
       return target[prop as string];
     },

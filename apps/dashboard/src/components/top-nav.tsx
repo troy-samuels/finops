@@ -3,12 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, LayoutDashboard, CreditCard, Settings } from "lucide-react";
+import { Menu, X, LayoutDashboard, CreditCard, Settings, Receipt } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/subscriptions", label: "Subscriptions", icon: CreditCard },
+  { href: "/dashboard/chargeback", label: "Chargeback", icon: Receipt },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ] as const;
 
