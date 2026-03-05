@@ -124,7 +124,7 @@ export const MOCK_COST_ALLOCATION_RULES: CostAllocationRule[] = [
     cost_centre_id: "cc-eng-001",
     rule_type: "project",
     match_key: null,
-    match_value: MOCK_PROJECTS[0].id, // ChatBot Pro
+    match_value: MOCK_PROJECTS[0]?.id ?? "", // ChatBot Pro
     allocation_percent: 100.0,
     priority: 10,
     created_at: isoStr(90),
@@ -137,7 +137,7 @@ export const MOCK_COST_ALLOCATION_RULES: CostAllocationRule[] = [
     cost_centre_id: "cc-mkt-001",
     rule_type: "project",
     match_key: null,
-    match_value: MOCK_PROJECTS[1].id, // ContentGen
+    match_value: MOCK_PROJECTS[1]?.id ?? "", // ContentGen
     allocation_percent: 100.0,
     priority: 10,
     created_at: isoStr(90),
@@ -150,7 +150,7 @@ export const MOCK_COST_ALLOCATION_RULES: CostAllocationRule[] = [
     cost_centre_id: "cc-sup-001",
     rule_type: "project",
     match_key: null,
-    match_value: MOCK_PROJECTS[2].id, // SupportBot
+    match_value: MOCK_PROJECTS[2]?.id ?? "", // SupportBot
     allocation_percent: 100.0,
     priority: 10,
     created_at: isoStr(90),
