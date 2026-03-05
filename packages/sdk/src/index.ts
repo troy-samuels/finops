@@ -24,6 +24,9 @@ export const SDK_VERSION = "0.1.0" as const;
 // ---- Main SDK class ----
 export { ProjectTracker } from "./client";
 
+// ---- Pricing registry ----
+export { MODEL_PRICING, getCostForTokens, getModelPricing } from "./pricing";
+
 // ---- Public types (type-only re-exports) ----
 export type {
   ProjectTrackerConfig,
@@ -37,3 +40,5 @@ export type {
   EventType,
   ResourceStatus,
 } from "./types";
+
+export type { ModelPricing } from "./pricing";

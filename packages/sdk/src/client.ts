@@ -9,6 +9,8 @@
 import { BatchQueue } from "./queue";
 import { scanEnvironment } from "./discovery";
 import { createOpenAIWrapper } from "./wrap-openai";
+import { createAnthropicWrapper } from "./wrap-anthropic";
+import { createGoogleAIWrapper } from "./wrap-google";
 import type {
   ProjectTrackerConfig,
   TrackLLMParams,
@@ -25,25 +27,76 @@ const DEFAULTS = {
   autoDiscovery: true,
 } as const;
 
+const REQUEST_ID_LENGTH = 32;
+
+function createRequestId(): string {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // ignore and fallback below
+  }
+
+  return `req_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
+}
+
+function isPositiveInteger(n: number): boolean {
+  return Number.isInteger(n) && n > 0;
+}
+
+function sanitizeString(input: string | undefined): string {
+  return (input ?? "").trim();
+}
+
 export class ProjectTracker {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly maxBatchSize: number;
   private readonly queue: BatchQueue<TrackEventPayload>;
+  private readonly enabled: boolean;
   private flushTimer: ReturnType<typeof setInterval> | null = null;
   private flushing = false;
   private shutdownCalled = false;
 
   constructor(config: ProjectTrackerConfig) {
-    this.apiKey = config.apiKey;
-    this.baseUrl = config.baseUrl.replace(/\/+$/, "");
-    this.maxBatchSize = config.maxBatchSize ?? DEFAULTS.maxBatchSize;
+    const apiKey = sanitizeString(config.apiKey);
+    const baseUrl = sanitizeString(config.baseUrl);
+
+    this.apiKey = apiKey;
+    this.baseUrl = baseUrl.replace(/\/+$/, "");
+
+    const maxBatchSize = config.maxBatchSize ?? DEFAULTS.maxBatchSize;
+    this.maxBatchSize = isPositiveInteger(maxBatchSize)
+      ? maxBatchSize
+      : DEFAULTS.maxBatchSize;
+
+    const maxQueueSize = config.maxQueueSize ?? DEFAULTS.maxQueueSize;
     this.queue = new BatchQueue<TrackEventPayload>(
-      config.maxQueueSize ?? DEFAULTS.maxQueueSize,
+      isPositiveInteger(maxQueueSize) ? maxQueueSize : DEFAULTS.maxQueueSize,
     );
 
+    let baseUrlValid = false;
+    try {
+      const parsed = new URL(this.baseUrl);
+      baseUrlValid = parsed.protocol === "https:" || parsed.protocol === "http:";
+    } catch {
+      baseUrlValid = false;
+    }
+
+    this.enabled = this.apiKey.length > 0 && baseUrlValid;
+    if (!this.enabled) {
+      console.warn(
+        "[@finops/sdk] invalid config: apiKey and baseUrl are required. Tracker is running in no-op mode.",
+      );
+    }
+
     // Start periodic flush timer
-    const intervalMs = config.flushIntervalMs ?? DEFAULTS.flushIntervalMs;
+    const intervalMsRaw = config.flushIntervalMs ?? DEFAULTS.flushIntervalMs;
+    const intervalMs = isPositiveInteger(intervalMsRaw)
+      ? intervalMsRaw
+      : DEFAULTS.flushIntervalMs;
+
     this.flushTimer = setInterval(() => {
       this.flush().catch(() => {
         // Swallow — flush handles errors internally
@@ -88,6 +141,8 @@ export class ProjectTracker {
         tokens_completion: params.tokensCompletion,
         metadata: params.metadata,
         timestamp: params.timestamp,
+        request_id: params.requestId ?? createRequestId(),
+        sent_at: params.sentAt ?? new Date().toISOString(),
       };
       this.enqueueAndMaybeFlush(payload);
     } catch {
@@ -109,6 +164,8 @@ export class ProjectTracker {
         tokens_completion: params.tokensCompletion,
         metadata: params.metadata,
         timestamp: params.timestamp,
+        request_id: params.requestId ?? createRequestId(),
+        sent_at: params.sentAt ?? new Date().toISOString(),
       };
       this.enqueueAndMaybeFlush(payload);
     } catch {
@@ -134,11 +191,49 @@ export class ProjectTracker {
   }
 
   /**
+   * Wrap an Anthropic client to auto-track messages.create() calls.
+   * Returns a proxied version of the client. The original client is
+   * not modified. Generic `T` preserves the caller's type.
+   */
+  wrapAnthropic<T>(client: T): T {
+    try {
+      return createAnthropicWrapper(
+        client,
+        (params) => this.trackLLM(params),
+      ) as T;
+    } catch {
+      // If wrapping fails, return the original client unmodified
+      return client;
+    }
+  }
+
+  /**
+   * Wrap a Google GenerativeAI client (or model instance) to auto-track
+   * generateContent() calls. Returns a proxied version. The original
+   * client is not modified. Generic `T` preserves the caller's type.
+   */
+  wrapGoogleAI<T>(client: T): T {
+    try {
+      return createGoogleAIWrapper(
+        client,
+        (params) => this.trackLLM(params),
+      ) as T;
+    } catch {
+      // If wrapping fails, return the original client unmodified
+      return client;
+    }
+  }
+
+  /**
    * Manually flush the queue. Sends all queued items to the backend.
    * Returns the API response or undefined on error/empty queue.
    * Concurrent flushes are skipped (guarded by `flushing` flag).
    */
   async flush(): Promise<TrackEventResponse | undefined> {
+    if (!this.enabled || this.shutdownCalled) {
+      return undefined;
+    }
+
     if (this.flushing) {
       return undefined;
     }
@@ -151,13 +246,18 @@ export class ProjectTracker {
     this.flushing = true;
     try {
       const url = `${this.baseUrl}/functions/v1/track-event`;
+      const serializedBatch = JSON.stringify(batch);
+      const batchRequestId = await this.createBatchRequestId(serializedBatch);
+      const requestTimestamp = new Date().toISOString();
       const response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "x-api-key": this.apiKey,
+          "x-request-id": batchRequestId,
+          "x-request-timestamp": requestTimestamp,
         },
-        body: JSON.stringify(batch),
+        body: serializedBatch,
       });
 
       if (response.status === 429) {
@@ -221,16 +321,43 @@ export class ProjectTracker {
   // ---- Private helpers ----
 
   private enqueueAndMaybeFlush(payload: TrackEventPayload): void {
-    if (this.shutdownCalled) {
+    if (this.shutdownCalled || !this.enabled) {
       return;
     }
 
-    this.queue.enqueue(payload);
+    this.queue.enqueue(this.withIdentity(payload));
 
     if (this.queue.length >= this.maxBatchSize) {
       this.flush().catch(() => {
         // Swallow — flush handles errors internally
       });
     }
+  }
+
+  private withIdentity(payload: TrackEventPayload): TrackEventPayload {
+    const requestId = payload.request_id ?? createRequestId();
+    const sentAt = payload.sent_at ?? new Date().toISOString();
+    return {
+      ...payload,
+      request_id: requestId,
+      sent_at: sentAt,
+    };
+  }
+
+  private async createBatchRequestId(serializedBatch: string): Promise<string> {
+    try {
+      if (typeof crypto !== "undefined" && crypto.subtle) {
+        const encoded = new TextEncoder().encode(serializedBatch);
+        const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
+        const hash = Array.from(new Uint8Array(hashBuffer))
+          .map((byte) => byte.toString(16).padStart(2, "0"))
+          .join("");
+        return `batch_${hash.slice(0, REQUEST_ID_LENGTH)}`;
+      }
+    } catch {
+      // ignore and fallback below
+    }
+
+    return `batch_${createRequestId()}`;
   }
 }

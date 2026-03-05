@@ -1,0 +1,134 @@
+// ============================================================
+// Anthropic Client Wrapper — Proxy-based messages.create interceptor
+// ============================================================
+// Uses nested Proxies to intercept client.messages.create() without
+// mutating the original client object or depending on the `@anthropic-ai/sdk`
+// package. All tracking errors are silently swallowed.
+// ============================================================
+
+import type { TrackLLMParams } from "./types";
+
+type TrackLLMFn = (params: TrackLLMParams) => void;
+
+/** Minimal structural type for an Anthropic message response. */
+interface AnthropicMessageLike {
+  model?: string;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+  };
+}
+
+/** Type guard: does the value look like an Anthropic Message? */
+function isAnthropicMessageLike(val: unknown): val is AnthropicMessageLike {
+  if (typeof val !== "object" || val === null) return false;
+  const obj = val as Record<string, unknown>;
+  return "model" in obj && typeof obj["model"] === "string";
+}
+
+/** Extract tracking params from an Anthropic message response. */
+function extractTrackingParams(response: AnthropicMessageLike): TrackLLMParams {
+  return {
+    provider: "anthropic",
+    model: response.model ?? "unknown",
+    tokensPrompt: response.usage?.input_tokens ?? 0,
+    tokensCompletion: response.usage?.output_tokens ?? 0,
+  };
+}
+
+/**
+ * Wrap an Anthropic client to auto-track messages.create() calls.
+ *
+ * Returns a Proxy of the client. The original client is not modified.
+ * If the client does not have the expected shape, returns it unchanged.
+ *
+ * @param client  An Anthropic client instance (typed as unknown)
+ * @param trackFn The trackLLM callback from ProjectTracker
+ * @returns       The proxied client
+ */
+export function createAnthropicWrapper(
+  client: unknown,
+  trackFn: TrackLLMFn,
+): unknown {
+  if (typeof client !== "object" || client === null) {
+    return client;
+  }
+
+  const clientObj = client as Record<string, unknown>;
+  const originalMessages = clientObj["messages"];
+  if (typeof originalMessages !== "object" || originalMessages === null) {
+    return client;
+  }
+
+  const messagesObj = originalMessages as Record<string, unknown>;
+  const originalCreate = messagesObj["create"];
+  if (typeof originalCreate !== "function") {
+    return client;
+  }
+
+  // Wrapped create that calls the original, then tracks usage
+  const wrappedCreate = function (
+    this: unknown,
+    ...args: unknown[]
+  ): unknown {
+    const result: unknown = Function.prototype.apply.call(
+      originalCreate,
+      this,
+      args,
+    );
+
+    // If the result is a thenable (Promise), attach fire-and-forget tracking
+    if (
+      result != null &&
+      typeof (result as Record<string, unknown>)["then"] === "function"
+    ) {
+      const promise = result as Promise<unknown>;
+      // Side-effect fork — we return the ORIGINAL promise, not the chained one.
+      promise.then(
+        (response: unknown) => {
+          try {
+            if (isAnthropicMessageLike(response)) {
+              trackFn(extractTrackingParams(response));
+            }
+          } catch {
+            // Swallow tracking errors
+          }
+        },
+        () => {
+          // Anthropic call failed — nothing to track
+        },
+      );
+      return result;
+    }
+
+    // Synchronous return (unlikely but handle gracefully)
+    try {
+      if (isAnthropicMessageLike(result)) {
+        trackFn(extractTrackingParams(result));
+      }
+    } catch {
+      // Swallow
+    }
+
+    return result;
+  };
+
+  // Build the nested Proxy chain
+  const messagesProxy = new Proxy(messagesObj, {
+    get(target: Record<string, unknown>, prop: string | symbol): unknown {
+      if (prop === "create") {
+        return wrappedCreate;
+      }
+      return target[prop as string];
+    },
+  });
+
+  return new Proxy(clientObj, {
+    get(target: Record<string, unknown>, prop: string | symbol): unknown {
+      if (prop === "messages") {
+        return messagesProxy;
+      }
+      return target[prop as string];
+    },
+  });
+}

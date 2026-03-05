@@ -1,9 +1,32 @@
 {
-  "name": "@finops/sdk",
+  "name": "@finops-tracker/sdk",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
+  "description": "Lightweight telemetry SDK that auto-tracks AI/API costs across OpenAI, Anthropic, Google, and more — zero config, zero crashes.",
+  "keywords": [
+    "ai",
+    "llm",
+    "cost-tracking",
+    "telemetry",
+    "openai",
+    "anthropic",
+    "google-ai",
+    "finops",
+    "observability",
+    "sdk"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/troy-samuels/finops.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://github.com/troy-samuels/finops#readme",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -14,11 +37,13 @@
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "tsup": "^8.3.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.4"
   }
 }
