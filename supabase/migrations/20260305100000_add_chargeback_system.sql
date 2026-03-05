@@ -228,6 +228,7 @@ CREATE OR REPLACE FUNCTION public.generate_chargeback_report(
 RETURNS UUID
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_report_id UUID;
@@ -250,13 +251,15 @@ BEGIN
   )
   RETURNING id INTO v_report_id;
 
-  -- Calculate total cost for the period
-  SELECT COALESCE(SUM(cost_usd), 0)
+  -- Calculate total cost for the period (join through projects to resolve org)
+  SELECT COALESCE(SUM(te.cost_incurred), 0)
   INTO v_total_cost
-  FROM public.transactional_events
-  WHERE org_id = p_org_id
-    AND created_at >= p_start::timestamptz
-    AND created_at < (p_end::date + INTERVAL '1 day')::timestamptz;
+  FROM public.transactional_events te
+  INNER JOIN public.projects p ON p.id = te.project_id
+  WHERE p.org_id = p_org_id
+    AND te.timestamp >= p_start::timestamptz
+    AND te.timestamp < (p_end + 1)::timestamptz
+    AND te.is_unmapped = false;
 
   -- For each cost centre, calculate allocated costs
   FOR v_cost_centre IN
@@ -265,53 +268,58 @@ BEGIN
     WHERE org_id = p_org_id
   LOOP
     -- Calculate cost for this cost centre based on allocation rules
+    -- Join transactional_events → projects to get org_id, then match against rules
     WITH matched_events AS (
       SELECT DISTINCT ON (te.id) te.*
       FROM public.transactional_events te
-      INNER JOIN public.cost_allocation_rules car ON car.org_id = te.org_id
-      WHERE te.org_id = p_org_id
-        AND te.created_at >= p_start::timestamptz
-        AND te.created_at < (p_end::date + INTERVAL '1 day')::timestamptz
+      INNER JOIN public.projects p ON p.id = te.project_id
+      INNER JOIN public.cost_allocation_rules car ON car.org_id = p.org_id
+      WHERE p.org_id = p_org_id
+        AND te.timestamp >= p_start::timestamptz
+        AND te.timestamp < (p_end + 1)::timestamptz
+        AND te.is_unmapped = false
         AND car.cost_centre_id = v_cost_centre.id
         AND (
-          -- Project rule
+          -- Project rule: match project_id
           (car.rule_type = 'project' AND te.project_id::text = car.match_value)
-          -- Provider rule
+          -- Provider rule: match provider name
           OR (car.rule_type = 'provider' AND te.provider = car.match_value)
-          -- Model rule
-          OR (car.rule_type = 'model' AND te.model = car.match_value)
-          -- Tag rule (metadata key/value match)
-          OR (car.rule_type = 'tag' AND te.metadata->car.match_key = to_jsonb(car.match_value))
+          -- Model rule: match model_or_endpoint
+          OR (car.rule_type = 'model' AND te.model_or_endpoint = car.match_value)
+          -- Tag rule: match metadata key/value
+          OR (car.rule_type = 'tag' AND te.metadata->>car.match_key = car.match_value)
         )
       ORDER BY te.id, car.priority DESC
     )
     SELECT
-      COALESCE(SUM(cost_usd), 0) AS total_cost,
-      COUNT(*) AS event_count,
-      COALESCE(SUM(tokens_prompt), 0) AS tokens_prompt,
-      COALESCE(SUM(tokens_completion), 0) AS tokens_completion
+      COALESCE(SUM(cost_incurred), 0),
+      COUNT(*)::integer,
+      COALESCE(SUM(tokens_prompt), 0)::bigint,
+      COALESCE(SUM(tokens_completion), 0)::bigint
     INTO v_line_item_cost, v_event_count, v_tokens_prompt, v_tokens_completion
     FROM matched_events;
 
     -- Build top models JSON
     WITH model_costs AS (
       SELECT
-        model,
-        SUM(cost_usd) AS cost,
-        ROUND((SUM(cost_usd) / NULLIF(v_line_item_cost, 0) * 100)::numeric, 2) AS percent
+        te.model_or_endpoint AS model,
+        SUM(te.cost_incurred) AS cost,
+        ROUND((SUM(te.cost_incurred) / NULLIF(v_line_item_cost, 0) * 100)::numeric, 2) AS percent
       FROM public.transactional_events te
-      INNER JOIN public.cost_allocation_rules car ON car.org_id = te.org_id
-      WHERE te.org_id = p_org_id
-        AND te.created_at >= p_start::timestamptz
-        AND te.created_at < (p_end::date + INTERVAL '1 day')::timestamptz
+      INNER JOIN public.projects p ON p.id = te.project_id
+      INNER JOIN public.cost_allocation_rules car ON car.org_id = p.org_id
+      WHERE p.org_id = p_org_id
+        AND te.timestamp >= p_start::timestamptz
+        AND te.timestamp < (p_end + 1)::timestamptz
+        AND te.is_unmapped = false
         AND car.cost_centre_id = v_cost_centre.id
         AND (
           (car.rule_type = 'project' AND te.project_id::text = car.match_value)
           OR (car.rule_type = 'provider' AND te.provider = car.match_value)
-          OR (car.rule_type = 'model' AND te.model = car.match_value)
-          OR (car.rule_type = 'tag' AND te.metadata->car.match_key = to_jsonb(car.match_value))
+          OR (car.rule_type = 'model' AND te.model_or_endpoint = car.match_value)
+          OR (car.rule_type = 'tag' AND te.metadata->>car.match_key = car.match_value)
         )
-      GROUP BY model
+      GROUP BY te.model_or_endpoint
       ORDER BY cost DESC
       LIMIT 3
     )
@@ -323,20 +331,21 @@ BEGIN
     WITH project_costs AS (
       SELECT
         p.name AS project,
-        SUM(te.cost_usd) AS cost,
-        ROUND((SUM(te.cost_usd) / NULLIF(v_line_item_cost, 0) * 100)::numeric, 2) AS percent
+        SUM(te.cost_incurred) AS cost,
+        ROUND((SUM(te.cost_incurred) / NULLIF(v_line_item_cost, 0) * 100)::numeric, 2) AS percent
       FROM public.transactional_events te
       INNER JOIN public.projects p ON p.id = te.project_id
-      INNER JOIN public.cost_allocation_rules car ON car.org_id = te.org_id
-      WHERE te.org_id = p_org_id
-        AND te.created_at >= p_start::timestamptz
-        AND te.created_at < (p_end::date + INTERVAL '1 day')::timestamptz
+      INNER JOIN public.cost_allocation_rules car ON car.org_id = p.org_id
+      WHERE p.org_id = p_org_id
+        AND te.timestamp >= p_start::timestamptz
+        AND te.timestamp < (p_end + 1)::timestamptz
+        AND te.is_unmapped = false
         AND car.cost_centre_id = v_cost_centre.id
         AND (
           (car.rule_type = 'project' AND te.project_id::text = car.match_value)
           OR (car.rule_type = 'provider' AND te.provider = car.match_value)
-          OR (car.rule_type = 'model' AND te.model = car.match_value)
-          OR (car.rule_type = 'tag' AND te.metadata->car.match_key = to_jsonb(car.match_value))
+          OR (car.rule_type = 'model' AND te.model_or_endpoint = car.match_value)
+          OR (car.rule_type = 'tag' AND te.metadata->>car.match_key = car.match_value)
         )
       GROUP BY p.name
       ORDER BY cost DESC

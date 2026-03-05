@@ -24,12 +24,18 @@ interface AnthropicMessageLike {
 /** Minimal structural type for an Anthropic streaming event. */
 interface AnthropicStreamEventLike {
   type?: string;
+  // message_start events have the full message object
   message?: {
     model?: string;
     usage?: {
       input_tokens?: number;
       output_tokens?: number;
     };
+  };
+  // message_delta events have usage at the top level
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
   };
 }
 
@@ -117,15 +123,21 @@ export function createAnthropicWrapper(
           // Accumulate usage data from streaming events
           if (typeof event === "object" && event !== null) {
             const eventObj = event as AnthropicStreamEventLike;
-            // The final event (message_stop) or message_delta events may contain usage
-            if (eventObj.type === "message_stop" || eventObj.type === "message_delta") {
-              if (eventObj.message?.model) {
+            // message_start has full message with model + input usage
+            if (eventObj.type === "message_start" && eventObj.message) {
+              if (eventObj.message.model) {
                 model = eventObj.message.model;
               }
-              if (eventObj.message?.usage) {
+              if (eventObj.message.usage) {
                 hasUsage = true;
                 inputTokens = eventObj.message.usage.input_tokens ?? inputTokens;
-                outputTokens = eventObj.message.usage.output_tokens ?? outputTokens;
+              }
+            }
+            // message_delta has output_tokens usage at top level
+            if (eventObj.type === "message_delta") {
+              if (eventObj.usage) {
+                hasUsage = true;
+                outputTokens = eventObj.usage.output_tokens ?? outputTokens;
               }
             }
           }
