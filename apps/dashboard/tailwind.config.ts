@@ -116,6 +116,18 @@ const config: Config = {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0" },
         },
+        "shimmer": {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(100%)" },
+        },
+        "scale-in": {
+          from: { opacity: "0", transform: "scale(0.95)" },
+          to: { opacity: "1", transform: "scale(1)" },
+        },
+        "progress-fill": {
+          from: { width: "0%" },
+          to: { width: "var(--progress-width)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -131,6 +143,9 @@ const config: Config = {
         "pop-in": "pop-in 0.4s ease-out both",
         "pulse-dot": "pulse-dot 2s ease-in-out infinite",
         "blink-cursor": "blink-cursor 1s step-end infinite",
+        "shimmer": "shimmer 2s ease-in-out infinite",
+        "scale-in": "scale-in 0.3s ease-out both",
+        "progress-fill": "progress-fill 1s ease-out 0.5s both",
       },
     },
   },

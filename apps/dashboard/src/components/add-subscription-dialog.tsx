@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,7 +47,7 @@ export function AddSubscriptionDialog({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     toast.success("Subscription added", {
-      description: `${form.provider} — $${form.monthly_cost}/mo`,
+      description: `${form.provider} — £${form.monthly_cost}/mo`,
     });
     setForm(INITIAL_FORM);
     onOpenChange(false);
@@ -57,11 +58,14 @@ export function AddSubscriptionDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add subscription</DialogTitle>
+          <DialogDescription className="text-[#666666]">
+            Track a fixed monthly cost from a tool or platform.
+          </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <form onSubmit={handleSubmit} className="mt-2 space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="provider">Provider</Label>
+            <Label className="text-xs" htmlFor="provider">Provider</Label>
             <Input
               id="provider"
               placeholder="e.g. OpenAI, Vercel, AWS"
@@ -69,12 +73,13 @@ export function AddSubscriptionDialog({
               onChange={(e) =>
                 setForm((f) => ({ ...f, provider: e.target.value }))
               }
+              className="h-10"
               required
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="monthly_cost">Monthly cost ($)</Label>
+            <Label className="text-xs" htmlFor="monthly_cost">Monthly cost (£)</Label>
             <Input
               id="monthly_cost"
               type="number"
@@ -85,12 +90,13 @@ export function AddSubscriptionDialog({
               onChange={(e) =>
                 setForm((f) => ({ ...f, monthly_cost: e.target.value }))
               }
+              className="h-10"
               required
             />
           </div>
 
           <div className="space-y-2">
-            <Label>Scope</Label>
+            <Label className="text-xs">Scope</Label>
             <Select
               value={form.scope}
               onValueChange={(v: "organization" | "project") =>
@@ -101,11 +107,11 @@ export function AddSubscriptionDialog({
                 }))
               }
             >
-              <SelectTrigger>
+              <SelectTrigger className="h-10">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="organization">Organization</SelectItem>
+                <SelectItem value="organization">Organisation</SelectItem>
                 <SelectItem value="project">Project</SelectItem>
               </SelectContent>
             </Select>
@@ -113,14 +119,14 @@ export function AddSubscriptionDialog({
 
           {form.scope === "project" ? (
             <div className="space-y-2">
-              <Label>Project</Label>
+              <Label className="text-xs">Project</Label>
               <Select
                 value={form.project_id ?? ""}
                 onValueChange={(v) =>
                   setForm((f) => ({ ...f, project_id: v }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="h-10">
                   <SelectValue placeholder="Select a project" />
                 </SelectTrigger>
                 <SelectContent>
@@ -134,8 +140,13 @@ export function AddSubscriptionDialog({
             </div>
           ) : null}
 
-          <div className="flex items-center justify-between">
-            <Label htmlFor="covers_metered">Covers metered usage</Label>
+          <div className="flex items-center justify-between rounded-xl bg-white/[0.02] p-4 ring-1 ring-white/[0.06]">
+            <div>
+              <Label htmlFor="covers_metered" className="text-sm">Covers metered usage</Label>
+              <p className="mt-0.5 text-xs text-[#555555]">
+                When enabled, metered usage won&apos;t be counted separately
+              </p>
+            </div>
             <Switch
               id="covers_metered"
               checked={form.covers_metered_usage}
@@ -148,12 +159,12 @@ export function AddSubscriptionDialog({
           <div className="flex justify-end gap-2 pt-2">
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               onClick={() => onOpenChange(false)}
             >
               Cancel
             </Button>
-            <Button type="submit">Add</Button>
+            <Button type="submit">Add subscription</Button>
           </div>
         </form>
       </DialogContent>

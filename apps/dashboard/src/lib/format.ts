@@ -1,15 +1,15 @@
 /**
- * Format a number as USD currency.
- * formatCurrency(1234.5) => "$1,234.50"
- * formatCurrency(0.003) => "$0.0030" (preserves precision for small amounts)
+ * Format a number as GBP currency.
+ * formatCurrency(1234.5) => "£1,234.50"
+ * formatCurrency(0.003) => "£0.0030" (preserves precision for small amounts)
  */
 export function formatCurrency(amount: number): string {
   if (Math.abs(amount) < 0.01 && amount !== 0) {
-    return `$${amount.toFixed(4)}`;
+    return `£${amount.toFixed(4)}`;
   }
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("en-GB", {
     style: "currency",
-    currency: "USD",
+    currency: "GBP",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
@@ -20,7 +20,7 @@ export function formatCurrency(amount: number): string {
  * formatNumber(1234567) => "1,234,567"
  */
 export function formatNumber(n: number): string {
-  return new Intl.NumberFormat("en-US").format(n);
+  return new Intl.NumberFormat("en-GB").format(n);
 }
 
 /**
@@ -28,7 +28,7 @@ export function formatNumber(n: number): string {
  * formatCompact(1234) => "1.2K"
  */
 export function formatCompact(n: number): string {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("en-GB", {
     notation: "compact",
     maximumFractionDigits: 1,
   }).format(n);
@@ -36,25 +36,25 @@ export function formatCompact(n: number): string {
 
 /**
  * Format an ISO date string to a readable date.
- * formatDate("2026-02-15T10:00:00Z") => "Feb 15, 2026"
+ * formatDate("2026-02-15T10:00:00Z") => "15 Feb 2026"
  */
 export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
+  return new Date(iso).toLocaleDateString("en-GB", {
     day: "numeric",
+    month: "short",
     year: "numeric",
   });
 }
 
 /**
  * Format date for chart axis (short month + day).
- * formatChartDate("2026-02-15") => "Feb 15"
+ * formatChartDate("2026-02-15") => "15 Feb"
  */
 export function formatChartDate(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00Z");
-  return d.toLocaleDateString("en-US", {
-    month: "short",
+  return d.toLocaleDateString("en-GB", {
     day: "numeric",
+    month: "short",
     timeZone: "UTC",
   });
 }
@@ -74,4 +74,14 @@ export function formatRelativeTime(iso: string): string {
   if (diffDays < 30) return `${String(diffDays)}d ago`;
   if (diffDays < 365) return `${String(Math.floor(diffDays / 30))}mo ago`;
   return `${String(Math.floor(diffDays / 365))}y ago`;
+}
+
+/**
+ * Format a percentage with sign.
+ * formatPercent(12.5) => "+12.5%"
+ * formatPercent(-8) => "-8%"
+ */
+export function formatPercent(value: number): string {
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(value % 1 === 0 ? 0 : 1)}%`;
 }

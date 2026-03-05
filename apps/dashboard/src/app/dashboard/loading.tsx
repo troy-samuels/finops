@@ -2,31 +2,46 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DashboardLoading() {
   return (
-    <div>
-      {/* Discovery banner skeleton */}
-      <div className="mb-12">
-        <Skeleton className="h-[72px] w-full rounded-xl" />
-      </div>
+    <div className="space-y-10">
+      {/* Budget alert skeleton */}
+      <Skeleton className="h-[72px] w-full rounded-xl" />
 
       {/* Hero metric skeleton */}
       <div>
-        <Skeleton className="h-4 w-48" />
-        <Skeleton className="mt-3 h-16 w-72 md:h-24 md:w-96" />
-        <Skeleton className="mt-3 h-7 w-40 rounded-full" />
+        <Skeleton className="h-3.5 w-48" />
+        <Skeleton className="mt-4 h-16 w-72 md:h-24 md:w-96" />
+        <Skeleton className="mt-4 h-8 w-44 rounded-full" />
       </div>
 
+      {/* Provider breakdown skeleton */}
+      <Skeleton className="h-[200px] w-full rounded-2xl" />
+
       {/* Trend chart skeleton */}
-      <div className="mt-12">
-        <Skeleton className="h-[250px] w-full rounded-xl md:h-[400px]" />
+      <div>
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-3.5 w-24" />
+          <Skeleton className="h-9 w-32 rounded-lg" />
+        </div>
+        <Skeleton className="mt-4 h-[280px] w-full rounded-2xl md:h-[360px]" />
       </div>
 
       {/* Top drivers skeleton */}
-      <div className="mt-12">
-        <Skeleton className="h-4 w-44" />
-        <div className="mt-4 space-y-4">
-          <Skeleton className="h-5 w-full" />
-          <Skeleton className="h-5 w-full" />
-          <Skeleton className="h-5 w-full" />
+      <div>
+        <Skeleton className="h-3.5 w-32" />
+        <div className="mt-5 space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-[72px] w-full rounded-xl" />
+          ))}
+        </div>
+      </div>
+
+      {/* Insights skeleton */}
+      <div>
+        <Skeleton className="h-3.5 w-28" />
+        <div className="mt-5 space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-[88px] w-full rounded-xl" />
+          ))}
         </div>
       </div>
     </div>

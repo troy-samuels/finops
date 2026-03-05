@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Settings, FolderKanban, KeyRound, CreditCard, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const SETTINGS_NAV = [
-  { href: "/dashboard/settings", label: "General" },
-  { href: "/dashboard/settings/projects", label: "Projects" },
-  { href: "/dashboard/settings/api-keys", label: "API Keys" },
-  { href: "/dashboard/settings/billing", label: "Billing" },
-  { href: "/dashboard/settings/notifications", label: "Notifications" },
+  { href: "/dashboard/settings", label: "General", icon: Settings },
+  { href: "/dashboard/settings/projects", label: "Projects", icon: FolderKanban },
+  { href: "/dashboard/settings/api-keys", label: "API Keys", icon: KeyRound },
+  { href: "/dashboard/settings/billing", label: "Billing", icon: CreditCard },
+  { href: "/dashboard/settings/notifications", label: "Notifications", icon: Bell },
 ] as const;
 
 export default function SettingsLayout({
@@ -29,7 +30,7 @@ export default function SettingsLayout({
       </p>
 
       <div className="mt-8 flex flex-col gap-8 md:flex-row">
-        <nav className="flex shrink-0 gap-1 overflow-x-auto md:w-44 md:flex-col">
+        <nav className="flex shrink-0 gap-1 overflow-x-auto md:w-48 md:flex-col">
           {SETTINGS_NAV.map((item) => {
             const isActive =
               item.href === "/dashboard/settings"
@@ -41,12 +42,13 @@ export default function SettingsLayout({
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "whitespace-nowrap rounded-lg px-3 py-2 text-sm transition-colors",
+                  "flex items-center gap-2.5 whitespace-nowrap rounded-xl px-3.5 py-2.5 text-sm transition-all duration-200",
                   isActive
                     ? "bg-white/[0.06] font-medium text-white"
                     : "text-[#888888] hover:bg-white/[0.03] hover:text-white",
                 )}
               >
+                <item.icon className="h-4 w-4 shrink-0" />
                 {item.label}
               </Link>
             );

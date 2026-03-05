@@ -7,7 +7,32 @@ import type {
   DailySpend,
   ActionItem,
   TopDriver,
+  ProviderBreakdown,
+  CostInsight,
+  BudgetAlert,
 } from "./types";
+
+// ============================================================
+// Provider Colours
+// ============================================================
+
+export const PROVIDER_COLOURS: Record<string, string> = {
+  openai: "#10A37F",
+  anthropic: "#D4A574",
+  google: "#4285F4",
+  vercel: "#FFFFFF",
+  aws: "#FF9900",
+  pinecone: "#00B4D8",
+};
+
+export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
+  openai: "OpenAI",
+  anthropic: "Anthropic",
+  google: "Google AI",
+  vercel: "Vercel",
+  aws: "AWS",
+  pinecone: "Pinecone",
+};
 
 // ============================================================
 // Helpers
@@ -99,6 +124,17 @@ export const MOCK_SUBSCRIPTIONS: RecurringSubscription[] = [
     created_at: "2026-02-01T09:00:00.000Z",
     updated_at: "2026-02-01T09:00:00.000Z",
   },
+  {
+    id: "c1b2c3d4-0000-4000-8000-000000000004",
+    org_id: MOCK_ORG.id,
+    project_id: null,
+    provider: "Pinecone",
+    monthly_cost: 70,
+    scope: "organization",
+    covers_metered_usage: false,
+    created_at: "2026-02-10T14:00:00.000Z",
+    updated_at: "2026-02-10T14:00:00.000Z",
+  },
 ];
 
 // ============================================================
@@ -110,6 +146,7 @@ const MODEL_PRICING = {
   "claude-3-5-sonnet-20241022": { prompt: 3.0, completion: 15.0 },
   "gpt-4o-mini": { prompt: 0.15, completion: 0.6 },
   "claude-3-haiku-20240307": { prompt: 0.25, completion: 1.25 },
+  "gemini-1.5-pro": { prompt: 1.25, completion: 5.0 },
 } as const;
 
 type ModelKey = keyof typeof MODEL_PRICING;
@@ -121,6 +158,7 @@ function costFor(model: ModelKey, promptTokens: number, completionTokens: number
 
 function providerFor(model: string): string {
   if (model.startsWith("gpt")) return "openai";
+  if (model.startsWith("gemini")) return "google";
   return "anthropic";
 }
 
@@ -137,9 +175,10 @@ for (let day = 29; day >= 0; day--) {
   for (let i = 0; i < chatbotCount; i++) {
     const rand = Math.random();
     let model: ModelKey;
-    if (rand < 0.6) model = "gpt-4o";
-    else if (rand < 0.9) model = "claude-3-5-sonnet-20241022";
-    else model = "gpt-4o-mini";
+    if (rand < 0.5) model = "gpt-4o";
+    else if (rand < 0.75) model = "claude-3-5-sonnet-20241022";
+    else if (rand < 0.9) model = "gpt-4o-mini";
+    else model = "gemini-1.5-pro";
 
     const prompt = Math.round(randomBetween(400, 1200));
     const completion = Math.round(randomBetween(150, 600));
@@ -249,7 +288,7 @@ export const MOCK_DISCOVERED_RESOURCES: DiscoveredResource[] = [
 // Daily Spend (pre-computed for chart)
 // ============================================================
 
-const dailySubscriptionCost = 220 / 30;
+const dailySubscriptionCost = 290 / 30;
 
 export const MOCK_DAILY_SPEND: DailySpend[] = Array.from({ length: 30 }, (_, i) => {
   const dayIndex = 29 - i;
@@ -350,34 +389,149 @@ function formatModelName(model: string): string {
   if (model.startsWith("gpt")) {
     return "GPT-" + model.slice(4);
   }
+  if (model.startsWith("gemini")) {
+    return model
+      .split("-")
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+      .join(" ");
+  }
   return model;
 }
 
-const costBySource = new Map<string, number>();
+const costBySource = new Map<string, { cost: number; provider: string }>();
 for (const e of events) {
   if (!e.is_unmapped) {
-    const current = costBySource.get(e.model_or_endpoint) ?? 0;
-    costBySource.set(e.model_or_endpoint, current + e.cost_incurred);
-  }
-}
-for (const sub of MOCK_SUBSCRIPTIONS) {
-  if (sub.monthly_cost > 0) {
-    const current = costBySource.get(sub.provider) ?? 0;
-    costBySource.set(sub.provider, current + sub.monthly_cost);
+    const current = costBySource.get(e.model_or_endpoint);
+    costBySource.set(e.model_or_endpoint, {
+      cost: (current?.cost ?? 0) + e.cost_incurred,
+      provider: e.provider,
+    });
   }
 }
 
+const totalMeteredSpend = Array.from(costBySource.values()).reduce(
+  (sum, v) => sum + v.cost,
+  0,
+);
+
 export const MOCK_TOP_DRIVERS: TopDriver[] = Array.from(costBySource.entries())
-  .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-  .slice(0, 3)
-  .map(([name, cost], i) => ({
+  .sort((a, b) => b[1].cost - a[1].cost || a[0].localeCompare(b[0]))
+  .slice(0, 5)
+  .map(([name, data], i) => ({
     rank: i + 1,
     name: name.includes("-") ? formatModelName(name) : name,
-    cost: Math.round(cost * 100) / 100,
+    cost: Math.round(data.cost * 100) / 100,
+    percentOfTotal: Math.round((data.cost / totalMeteredSpend) * 100),
+    trend: i === 0 ? ("up" as const) : i === 1 ? ("up" as const) : ("down" as const),
+    trendPercent: i === 0 ? 8 : i === 1 ? 15 : -5,
+    provider: data.provider,
   }));
+
+// ============================================================
+// Provider Breakdown
+// ============================================================
+
+const spendByProvider = new Map<string, number>();
+for (const e of events) {
+  if (!e.is_unmapped) {
+    const current = spendByProvider.get(e.provider) ?? 0;
+    spendByProvider.set(e.provider, current + e.cost_incurred);
+  }
+}
+
+const totalProviderSpend = Array.from(spendByProvider.values()).reduce(
+  (sum, v) => sum + v,
+  0,
+);
+
+export const MOCK_PROVIDER_BREAKDOWN: ProviderBreakdown[] = Array.from(
+  spendByProvider.entries(),
+)
+  .sort((a, b) => b[1] - a[1])
+  .map(([provider, spend]) => ({
+    provider,
+    displayName: PROVIDER_DISPLAY_NAMES[provider] ?? provider,
+    spend: Math.round(spend * 100) / 100,
+    percentOfTotal: Math.round((spend / totalProviderSpend) * 100),
+    colour: PROVIDER_COLOURS[provider] ?? "#888888",
+  }));
+
+// ============================================================
+// Cost Insights
+// ============================================================
+
+const gpt4oSpend = costBySource.get("gpt-4o")?.cost ?? 0;
+const gpt4oPercent = totalMeteredSpend > 0 ? Math.round((gpt4oSpend / totalMeteredSpend) * 100) : 0;
+
+export const MOCK_INSIGHTS: CostInsight[] = [
+  {
+    id: "insight-1",
+    icon: "lightbulb",
+    title: `GPT-4o accounts for ${gpt4oPercent}% of your metered spend`,
+    description:
+      "Consider switching low-complexity tasks to GPT-4o-mini. Based on your usage patterns, this could save you roughly £430 per month.",
+    savingsAmount: 430,
+    severity: "opportunity",
+  },
+  {
+    id: "insight-2",
+    icon: "trending-down",
+    title: "Weekend usage is 60% lower than weekdays",
+    description:
+      "Your AI usage drops significantly on weekends. If these are automated tasks, consider batching them during off-peak hours for potential rate savings.",
+    savingsAmount: null,
+    severity: "info",
+  },
+  {
+    id: "insight-3",
+    icon: "alert",
+    title: "5 API calls have unmapped pricing",
+    description:
+      "We couldn't calculate costs for claude-3-7-sonnet calls. Once pricing data is synced, these will appear in your totals.",
+    savingsAmount: null,
+    severity: "warning",
+  },
+];
+
+// ============================================================
+// Budget Alert
+// ============================================================
+
+const daysInMonth = new Date(
+  new Date().getFullYear(),
+  new Date().getMonth() + 1,
+  0,
+).getDate();
+const currentDay = new Date().getDate();
+const daysRemaining = daysInMonth - currentDay;
+const dailyAverage = MOCK_TOTAL_SPEND_THIS_MONTH / currentDay;
+const projectedSpend = dailyAverage * daysInMonth;
+const monthlyBudget = 3500;
+
+export const MOCK_BUDGET_ALERT: BudgetAlert = {
+  currentSpend: MOCK_TOTAL_SPEND_THIS_MONTH,
+  projectedSpend: Math.round(projectedSpend * 100) / 100,
+  budget: monthlyBudget,
+  percentUsed: Math.round((MOCK_TOTAL_SPEND_THIS_MONTH / monthlyBudget) * 100),
+  daysRemaining,
+  isOverBudget: MOCK_TOTAL_SPEND_THIS_MONTH > monthlyBudget,
+  isProjectedOverBudget: projectedSpend > monthlyBudget,
+};
 
 // ============================================================
 // Spend Trend (month-over-month mock)
 // ============================================================
 
-export const MOCK_SPEND_TREND_PERCENT: number = -12;
+export const MOCK_SPEND_TREND_PERCENT: number = 12;
+
+// ============================================================
+// Subscription totals
+// ============================================================
+
+export const MOCK_TOTAL_SUBSCRIPTION_COST: number = MOCK_SUBSCRIPTIONS.reduce(
+  (sum, s) => sum + s.monthly_cost,
+  0,
+);
+
+export const MOCK_TRUE_COST: number =
+  MOCK_TOTAL_SPEND_THIS_MONTH + MOCK_TOTAL_SUBSCRIPTION_COST;
