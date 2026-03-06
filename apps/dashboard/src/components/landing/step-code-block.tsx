@@ -10,7 +10,7 @@ const CODE_LINES = [
         <span className="text-[#888888]">import</span>{" "}
         <span className="text-white">{"{ ProjectTracker }"}</span>{" "}
         <span className="text-[#888888]">from</span>{" "}
-        <span className="text-emerald-400">{'"@finops/sdk"'}</span>
+        <span className="text-emerald-400">{'"@costpane/sdk"'}</span>
       </>
     ),
   },
@@ -33,7 +33,22 @@ const CODE_LINES = [
         {"  "}
         <span className="text-white">apiKey</span>
         <span className="text-[#888888]">:</span>{" "}
-        <span className="text-emerald-400">process.env.FINOPS_API_KEY</span>
+        <span className="text-emerald-400">process.env.COSTPANE_API_KEY</span>
+        <span className="text-white">,</span>
+      </>
+    ),
+  },
+  {
+    content: (
+      <>
+        {"  "}
+        <span className="text-white">defaultAttribution</span>
+        <span className="text-[#888888]">:</span>{" "}
+        <span className="text-white">{"{"}</span>{" "}
+        <span className="text-white">feature</span>
+        <span className="text-[#888888]">:</span>{" "}
+        <span className="text-emerald-400">{'"customer-chat"'}</span>{" "}
+        <span className="text-white">{"}"}</span>
       </>
     ),
   },
@@ -44,7 +59,7 @@ const CODE_LINES = [
   {
     content: (
       <span className="text-[#555555]">
-        {"// Auto-tracks every OpenAI call"}
+        {"// Auto-tracks every OpenAI call with feature attribution"}
       </span>
     ),
   },

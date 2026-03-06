@@ -1,0 +1,47 @@
+name: 'CostPane AI Cost Gate'
+description: 'Analyse PRs for AI cost impact. Budget enforcement and model change detection.'
+branding:
+  icon: 'dollar-sign'
+  color: 'green'
+inputs:
+  mode:
+    description: 'Operating mode: "budget", "analysis", or "both"'
+    required: false
+    default: 'analysis'
+  costpane-api-key:
+    description: 'CostPane API key (required for budget mode)'
+    required: false
+  costpane-url:
+    description: 'CostPane API URL'
+    required: false
+    default: 'https://api.costpane.com'
+  warn-threshold:
+    description: 'Budget percentage to trigger warning (0-100)'
+    required: false
+    default: '80'
+  block-threshold:
+    description: 'Budget percentage to block merge (0-100, 0 = never block)'
+    required: false
+    default: '0'
+  github-token:
+    description: 'GitHub token for PR comments'
+    required: false
+    default: '${{ github.token }}'
+  model-cost-threshold:
+    description: 'Flag model changes with cost increase above this multiplier (e.g., 2 = 2x more expensive)'
+    required: false
+    default: '3'
+  fail-on-error:
+    description: 'Fail the action if analysis encounters errors (vs warn and continue)'
+    required: false
+    default: 'false'
+outputs:
+  cost-impact:
+    description: 'Estimated monthly cost impact in USD'
+  budget-status:
+    description: 'Budget status: ok, warning, exceeded'
+  models-detected:
+    description: 'JSON array of AI models detected in the diff'
+runs:
+  using: 'node20'
+  main: 'dist/main.js'

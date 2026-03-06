@@ -7,7 +7,7 @@
 // return proxied model instances. All tracking errors are silently swallowed.
 // ============================================================
 
-import type { TrackLLMParams } from "./types";
+import type { TrackLLMParams, Attribution } from "./types";
 import { wrapAsyncIterable } from "./wrap-stream";
 
 type TrackLLMFn = (params: TrackLLMParams) => void;
@@ -38,6 +38,7 @@ function isGoogleResultLike(
 function extractTrackingParams(
   result: GoogleGenerateContentResultLike,
   modelName: string,
+  attribution?: Attribution,
 ): TrackLLMParams {
   const usage = result.response?.usageMetadata;
   return {
@@ -45,6 +46,7 @@ function extractTrackingParams(
     model: modelName,
     tokensPrompt: usage?.promptTokenCount ?? 0,
     tokensCompletion: usage?.candidatesTokenCount ?? 0,
+    attribution,
   };
 }
 
@@ -55,6 +57,7 @@ function extractTrackingParams(
 function proxyModelInstance(
   model: Record<string, unknown>,
   trackFn: TrackLLMFn,
+  attribution?: Attribution,
 ): Record<string, unknown> {
   // Try to extract the model name from the instance
   const modelName =
@@ -99,7 +102,7 @@ function proxyModelInstance(
           (response: unknown) => {
             try {
               if (isGoogleResultLike(response)) {
-                trackFn(extractTrackingParams(response, modelName));
+                trackFn(extractTrackingParams(response, modelName, attribution));
               }
             } catch {
               // Swallow tracking errors
@@ -115,7 +118,7 @@ function proxyModelInstance(
       // Synchronous return (unlikely but handle gracefully)
       try {
         if (isGoogleResultLike(result)) {
-          trackFn(extractTrackingParams(result, modelName));
+          trackFn(extractTrackingParams(result, modelName, attribution));
         }
       } catch {
         // Swallow
@@ -180,6 +183,7 @@ function proxyModelInstance(
                       model: modelName,
                       tokensPrompt: promptTokens,
                       tokensCompletion: candidatesTokens,
+                      attribution,
                     });
                   }
                 },
@@ -225,13 +229,15 @@ function proxyModelInstance(
  * itself proxied. Also handles the case where the user has already obtained
  * a model instance (by checking for generateContent directly).
  *
- * @param client  A Google GenerativeAI client or model instance
- * @param trackFn The trackLLM callback from ProjectTracker
- * @returns       The proxied client
+ * @param client      A Google GenerativeAI client or model instance
+ * @param trackFn     The trackLLM callback from ProjectTracker
+ * @param attribution Optional attribution to attach to all tracked calls from this client
+ * @returns           The proxied client
  */
 export function createGoogleAIWrapper(
   client: unknown,
   trackFn: TrackLLMFn,
+  attribution?: Attribution,
 ): unknown {
   if (typeof client !== "object" || client === null) {
     return client;
@@ -241,7 +247,7 @@ export function createGoogleAIWrapper(
 
   // Case 1: client is already a model instance (has generateContent)
   if (typeof clientObj["generateContent"] === "function") {
-    return proxyModelInstance(clientObj, trackFn);
+    return proxyModelInstance(clientObj, trackFn, attribution);
   }
 
   // Case 2: client is the GoogleGenerativeAI class instance (has getGenerativeModel)
@@ -265,7 +271,7 @@ export function createGoogleAIWrapper(
     }
 
     try {
-      return proxyModelInstance(model as Record<string, unknown>, trackFn);
+      return proxyModelInstance(model as Record<string, unknown>, trackFn, attribution);
     } catch {
       return model;
     }

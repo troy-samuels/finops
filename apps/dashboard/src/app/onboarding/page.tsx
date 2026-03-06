@@ -45,34 +45,36 @@ const VALUE_PROPS = [
 
 function getCodeSnippet(provider: ProviderId): string {
   const snippets: Record<ProviderId, string> = {
-    openai: `import { ProjectTracker } from '@finops/sdk'
+    openai: `// npm install @costpane/sdk (also: @finops-tracker/sdk)
+import { ProjectTracker } from '@costpane/sdk'
 
-const tracker = new ProjectTracker({ apiKey: '${MOCK_SDK_KEY}' })
+const tracker = new ProjectTracker({
+  apiKey: '${MOCK_SDK_KEY}',
+  defaultAttribution: { feature: 'my-ai-chatbot' },
+})
 
 // That's it — every OpenAI call is now tracked
 const openai = tracker.wrapOpenAI(new OpenAI())`,
-    anthropic: `import { ProjectTracker } from '@finops/sdk'
+    anthropic: `// npm install @costpane/sdk (also: @finops-tracker/sdk)
+import { ProjectTracker } from '@costpane/sdk'
 
-const tracker = new ProjectTracker({ apiKey: '${MOCK_SDK_KEY}' })
+const tracker = new ProjectTracker({
+  apiKey: '${MOCK_SDK_KEY}',
+  defaultAttribution: { feature: 'my-ai-chatbot' },
+})
 
-// Track Anthropic calls automatically
-tracker.trackLLM({
-  provider: 'anthropic',
-  model: 'claude-3-5-sonnet',
-  tokensPrompt: usage.input_tokens,
-  tokensCompletion: usage.output_tokens,
-})`,
-    google: `import { ProjectTracker } from '@finops/sdk'
+// Wrap your Anthropic client — auto-tracks all calls
+const anthropic = tracker.wrapAnthropic(new Anthropic())`,
+    google: `// npm install @costpane/sdk (also: @finops-tracker/sdk)
+import { ProjectTracker } from '@costpane/sdk'
 
-const tracker = new ProjectTracker({ apiKey: '${MOCK_SDK_KEY}' })
+const tracker = new ProjectTracker({
+  apiKey: '${MOCK_SDK_KEY}',
+  defaultAttribution: { feature: 'my-ai-chatbot' },
+})
 
-// Track Google AI calls automatically
-tracker.trackLLM({
-  provider: 'google',
-  model: 'gemini-1.5-pro',
-  tokensPrompt: usage.promptTokenCount,
-  tokensCompletion: usage.candidatesTokenCount,
-})`,
+// Wrap your Google AI client — auto-tracks all calls
+const genAI = tracker.wrapGoogleAI(new GoogleGenerativeAI(apiKey))`,
   };
 
   return snippets[provider];
@@ -106,7 +108,7 @@ export default function OnboardingPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  const totalSteps = 3;
+  const totalSteps = 4;
 
   return (
     <div className="w-full max-w-lg">
@@ -325,8 +327,52 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* Step 3: Success */}
+        {/* Step 3: Verify connection */}
         {step === 2 && (
+          <div className="text-center">
+            <div className="mx-auto mt-8 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10">
+              <Check className="h-8 w-8 text-emerald-400" />
+            </div>
+            <h1 className="mt-6 text-2xl font-semibold tracking-tight text-white">
+              ✓ First event received!
+            </h1>
+            <p className="mx-auto mt-3 max-w-sm text-sm text-[#888888]">
+              We tracked <span className="text-white font-medium">147 prompt tokens</span> on{" "}
+              <span className="text-white font-medium">gpt-4o</span>
+            </p>
+            <div className="mx-auto mt-6 max-w-sm rounded-xl bg-[#111111] p-5 ring-1 ring-white/[0.08]">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[#888888]">Model</span>
+                <span className="text-white font-mono">gpt-4o</span>
+              </div>
+              <div className="mt-3 flex items-center justify-between text-xs">
+                <span className="text-[#888888]">Tokens</span>
+                <span className="text-white">147 prompt + 52 completion</span>
+              </div>
+              <div className="mt-3 flex items-center justify-between text-xs">
+                <span className="text-[#888888]">Cost</span>
+                <span className="text-emerald-400 font-medium">$0.0012</span>
+              </div>
+              <div className="mt-3 flex items-center justify-between text-xs">
+                <span className="text-[#888888]">Feature</span>
+                <span className="text-white font-mono">my-ai-chatbot</span>
+              </div>
+            </div>
+            <div className="mt-8 flex justify-between">
+              <Button variant="ghost" onClick={() => transition(1)} className="gap-2">
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Button>
+              <Button onClick={() => transition(3)} className="gap-2">
+                Continue
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Success */}
+        {step === 3 && (
           <div className="text-center">
             <div className="mx-auto mt-8 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10">
               <Check className="h-8 w-8 text-emerald-400" />
@@ -357,6 +403,14 @@ export default function OnboardingPage() {
                   <code className="mt-1.5 block break-all font-mono text-xs text-white">
                     {MOCK_SDK_KEY}
                   </code>
+                </div>
+                <div className="mt-4 rounded-xl bg-blue-500/[0.06] p-4 ring-1 ring-blue-500/[0.2]">
+                  <p className="text-xs font-medium text-white">
+                    💡 Pro tip: Tag costs by feature
+                  </p>
+                  <p className="mt-1.5 text-xs text-[#888888]">
+                    Use attribution to see which parts of your app cost the most. Perfect for optimising spend.
+                  </p>
                 </div>
               </div>
             ) : null}

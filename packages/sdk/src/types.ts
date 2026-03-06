@@ -4,6 +4,46 @@
 
 // ---- SDK Configuration ----
 
+/** Structured attribution fields for per-feature cost tracking. */
+export interface Attribution {
+  /** Feature name (e.g., "chat-assistant", "document-analysis"). */
+  feature?: string;
+  /** Workflow or use-case identifier (e.g., "onboarding", "support-ticket"). */
+  workflow?: string;
+  /** Cost centre or department (e.g., "engineering", "customer-success"). */
+  costCentre?: string;
+  /** User or customer identifier. */
+  userId?: string;
+  /** Environment (e.g., "production", "staging", "development"). */
+  environment?: string;
+  /** Custom key-value tags for flexible attribution. */
+  tags?: Record<string, string>;
+}
+
+/** Budget alert information. */
+export interface BudgetAlert {
+  /** Alert type: hourly or daily window. */
+  type: 'hourly' | 'daily';
+  /** Configured limit in USD. */
+  limitUsd: number;
+  /** Current spend in USD for this window. */
+  currentUsd: number;
+  /** Percentage of limit used (0-100+). */
+  percentUsed: number;
+}
+
+/** Budget configuration for spend tracking and alerts. */
+export interface BudgetConfig {
+  /** Hourly spend limit in USD. */
+  hourlyLimitUsd?: number;
+  /** Daily spend limit in USD. */
+  dailyLimitUsd?: number;
+  /** Callback fired when 80% of limit is reached. */
+  onBudgetAlert?: (info: BudgetAlert) => void;
+  /** Callback fired when 100% of limit is reached. */
+  onBudgetExceeded?: (info: BudgetAlert) => void;
+}
+
 export interface ProjectTrackerConfig {
   /** Raw API key sent as x-api-key header. */
   apiKey: string;
@@ -24,6 +64,10 @@ export interface ProjectTrackerConfig {
    * - 'tokens-only': sends provider, model, token counts — no metadata
    */
   trackingMode?: 'full' | 'cost-only' | 'tokens-only';
+  /** Default attribution merged with per-call attribution (per-call wins). */
+  defaultAttribution?: Attribution;
+  /** Budget limits and alert callbacks for spend tracking. */
+  budgetConfig?: BudgetConfig;
 }
 
 // ---- Public method parameter types ----
@@ -34,6 +78,7 @@ export interface TrackLLMParams {
   tokensPrompt: number;
   tokensCompletion: number;
   metadata?: Record<string, unknown>;
+  attribution?: Attribution;
   timestamp?: string;
   requestId?: string;
   sentAt?: string;
@@ -45,6 +90,7 @@ export interface TrackAPIParams {
   tokensPrompt: number;
   tokensCompletion: number;
   metadata?: Record<string, unknown>;
+  attribution?: Attribution;
   timestamp?: string;
   requestId?: string;
   sentAt?: string;
@@ -63,6 +109,8 @@ export interface TelemetryPayload {
   tokens_prompt: number;
   tokens_completion: number;
   metadata?: Record<string, unknown>;
+  attribution?: Attribution;
+  cost_usd?: number;
   timestamp?: string;
   request_id?: string;
   sent_at?: string;

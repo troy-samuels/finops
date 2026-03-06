@@ -7,7 +7,7 @@
 // streaming responses. All tracking errors are silently swallowed.
 // ============================================================
 
-import type { TrackLLMParams } from "./types";
+import type { TrackLLMParams, Attribution } from "./types";
 import { wrapAsyncIterable } from "./wrap-stream";
 
 type TrackLLMFn = (params: TrackLLMParams) => void;
@@ -62,22 +62,24 @@ function isAsyncIterable(val: unknown): val is AsyncIterable<unknown> {
 }
 
 /** Extract tracking params from a chat completion response. */
-function extractTrackingParams(response: ChatCompletionLike): TrackLLMParams {
+function extractTrackingParams(response: ChatCompletionLike, attribution?: Attribution): TrackLLMParams {
   return {
     provider: "openai",
     model: response.model ?? "unknown",
     tokensPrompt: response.usage?.prompt_tokens ?? 0,
     tokensCompletion: response.usage?.completion_tokens ?? 0,
+    attribution,
   };
 }
 
 /** Extract tracking params from an embeddings response. */
-function extractEmbeddingsParams(response: EmbeddingsResponseLike): TrackLLMParams {
+function extractEmbeddingsParams(response: EmbeddingsResponseLike, attribution?: Attribution): TrackLLMParams {
   return {
     provider: "openai",
     model: response.model ?? "unknown",
     tokensPrompt: response.usage?.prompt_tokens ?? 0,
     tokensCompletion: 0, // Embeddings have no completion tokens
+    attribution,
   };
 }
 
@@ -88,13 +90,15 @@ function extractEmbeddingsParams(response: EmbeddingsResponseLike): TrackLLMPara
  * Returns a Proxy of the client. The original client is not modified.
  * If the client does not have the expected shape, returns it unchanged.
  *
- * @param client  An OpenAI client instance (typed as unknown)
- * @param trackFn The trackLLM callback from ProjectTracker
- * @returns       The proxied client
+ * @param client      An OpenAI client instance (typed as unknown)
+ * @param trackFn     The trackLLM callback from ProjectTracker
+ * @param attribution Optional attribution to attach to all tracked calls from this client
+ * @returns           The proxied client
  */
 export function createOpenAIWrapper(
   client: unknown,
   trackFn: TrackLLMFn,
+  attribution?: Attribution,
 ): unknown {
   if (typeof client !== "object" || client === null) {
     return client;
@@ -185,6 +189,7 @@ export function createOpenAIWrapper(
               model,
               tokensPrompt: promptTokens,
               tokensCompletion: completionTokens,
+              attribution,
             });
           }
         },
@@ -203,7 +208,7 @@ export function createOpenAIWrapper(
         (response: unknown) => {
           try {
             if (isChatCompletionLike(response)) {
-              trackFn(extractTrackingParams(response));
+              trackFn(extractTrackingParams(response, attribution));
             }
           } catch {
             // Swallow tracking errors
@@ -219,7 +224,7 @@ export function createOpenAIWrapper(
     // Synchronous return (unlikely but handle gracefully)
     try {
       if (isChatCompletionLike(result)) {
-        trackFn(extractTrackingParams(result));
+        trackFn(extractTrackingParams(result, attribution));
       }
     } catch {
       // Swallow
@@ -274,7 +279,7 @@ export function createOpenAIWrapper(
             (response: unknown) => {
               try {
                 if (isEmbeddingsResponseLike(response)) {
-                  trackFn(extractEmbeddingsParams(response));
+                  trackFn(extractEmbeddingsParams(response, attribution));
                 }
               } catch {
                 // Swallow tracking errors

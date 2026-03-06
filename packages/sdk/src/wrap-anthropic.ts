@@ -7,7 +7,7 @@
 // All tracking errors are silently swallowed.
 // ============================================================
 
-import type { TrackLLMParams } from "./types";
+import type { TrackLLMParams, Attribution } from "./types";
 import { wrapAsyncIterable } from "./wrap-stream";
 
 type TrackLLMFn = (params: TrackLLMParams) => void;
@@ -53,12 +53,13 @@ function isAsyncIterable(val: unknown): val is AsyncIterable<unknown> {
 }
 
 /** Extract tracking params from an Anthropic message response. */
-function extractTrackingParams(response: AnthropicMessageLike): TrackLLMParams {
+function extractTrackingParams(response: AnthropicMessageLike, attribution?: Attribution): TrackLLMParams {
   return {
     provider: "anthropic",
     model: response.model ?? "unknown",
     tokensPrompt: response.usage?.input_tokens ?? 0,
     tokensCompletion: response.usage?.output_tokens ?? 0,
+    attribution,
   };
 }
 
@@ -68,13 +69,15 @@ function extractTrackingParams(response: AnthropicMessageLike): TrackLLMParams {
  * Returns a Proxy of the client. The original client is not modified.
  * If the client does not have the expected shape, returns it unchanged.
  *
- * @param client  An Anthropic client instance (typed as unknown)
- * @param trackFn The trackLLM callback from ProjectTracker
- * @returns       The proxied client
+ * @param client      An Anthropic client instance (typed as unknown)
+ * @param trackFn     The trackLLM callback from ProjectTracker
+ * @param attribution Optional attribution to attach to all tracked calls from this client
+ * @returns           The proxied client
  */
 export function createAnthropicWrapper(
   client: unknown,
   trackFn: TrackLLMFn,
+  attribution?: Attribution,
 ): unknown {
   if (typeof client !== "object" || client === null) {
     return client;
@@ -150,6 +153,7 @@ export function createAnthropicWrapper(
               model,
               tokensPrompt: inputTokens,
               tokensCompletion: outputTokens,
+              attribution,
             });
           }
         },
@@ -167,7 +171,7 @@ export function createAnthropicWrapper(
         (response: unknown) => {
           try {
             if (isAnthropicMessageLike(response)) {
-              trackFn(extractTrackingParams(response));
+              trackFn(extractTrackingParams(response, attribution));
             }
           } catch {
             // Swallow tracking errors
@@ -183,7 +187,7 @@ export function createAnthropicWrapper(
     // Synchronous return (unlikely but handle gracefully)
     try {
       if (isAnthropicMessageLike(result)) {
-        trackFn(extractTrackingParams(result));
+        trackFn(extractTrackingParams(result, attribution));
       }
     } catch {
       // Swallow
